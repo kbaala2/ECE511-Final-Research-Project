@@ -1,0 +1,18 @@
+{{include_text('../problem_base.yaml')}}
+problem:
+  <<<: *problem_base
+  instance: {C: 144, M: 144, P: 56, Q: 56, R: 3, S: 3, G: 144}
+
+  name: Conv2d
+  dnn_name: mobilenet_v2
+  notes: Conv2d
+  # These histograms symmetric and zero-centered (the centermost bin is the
+  # probability of zero). Histograms are normalized to sum to 1.0 and they have
+  # 2^N-1 bins for some integer N. Higher N yields higher-fidelity histograms,
+  # but also increases runtime & the size of YAML files. Encoding functions will
+  # upsample or downsample histograms depending on the bitwidth of the
+  # corresponding operands.
+  histograms:
+    Inputs: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.997185,0.0028148,2.21443e-10,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    Weights: [0,0,0,0,0,0,0,0,0,0,0,0,0,0.00694444,0.189815,0.600309,0.199074,0.00385802,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    Outputs: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]

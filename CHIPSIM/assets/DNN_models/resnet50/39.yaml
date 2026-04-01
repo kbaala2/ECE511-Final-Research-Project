@@ -1,0 +1,18 @@
+{{include_text('../problem_base.yaml')}}
+problem:
+  <<<: *problem_base
+  instance: {C: 256, M: 1024, P: 14, Q: 14}
+
+  name: Conv2d
+  dnn_name: resnet50
+  notes: Conv2d
+  # These histograms symmetric and zero-centered (the centermost bin is the
+  # probability of zero). Histograms are normalized to sum to 1.0 and they have
+  # 2^N-1 bins for some integer N. Higher N yields higher-fidelity histograms,
+  # but also increases runtime & the size of YAML files. Encoding functions will
+  # upsample or downsample histograms depending on the bitwidth of the
+  # corresponding operands.
+  histograms:
+    Inputs: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.655229,0.0120334,0.0119057,0.0117734,0.0116311,0.0114859,0.0113467,0.0111785,0.0110196,0.0108469,0.0106566,0.010463,0.0102603,0.0100315,0.00980539,0.00957216]
+    Weights: [0,0,0,0,0,0,0,3.8147e-06,7.62939e-06,1.14441e-05,6.48499e-05,0.000179291,0.00063324,0.00668335,0.132771,0.752041,0.0984535,0.00747681,0.00117493,0.000324249,0.000114441,3.8147e-05,1.52588e-05,7.62939e-06,0,0,0,0,0,0,0]
+    Outputs: [0.00906942,0.0107851,0.0127942,0.0151363,0.0178558,0.0209913,0.0245536,0.0285413,0.032909,0.0375691,0.0424882,0.0475192,0.0526008,0.0562187,0.0565159,0.0566584,0.055533,0.0501608,0.0447283,0.0391462,0.03406,0.0296247,0.0257686,0.022368,0.0193594,0.0167061,0.0143957,0.0123822,0.0106045,0.00904175,0.00767217]

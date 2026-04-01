@@ -1,0 +1,17 @@
+# Cross-Simulation Analysis Configuration
+# This config specifies which simulation results to compare
+
+analysis_name: "example_comparison"
+
+# List of raw results directories to analyze
+# These can be either:
+#   - Directory names (will search in _results/raw_results/)
+#   - Absolute paths to result directories
+result_directories:
+  - "2025.10.07_12.30.45_workload_alexnet_adj_matrix_10x10_mesh_mapping_100_with_io_100chiplets_Garnet_pipelined"
+  - "2025.10.07_13.15.22_workload_alexnet_adj_matrix_10x10_mesh_mapping_100_with_io_100chiplets_Garnet_non-pipelined"
+
+# Optional: Specify custom output directory
+# If not provided, results will be saved to:
+#   _results/cross_simulation_analysis_results/{analysis_name}/
+# output_dir: "/path/to/custom/output"

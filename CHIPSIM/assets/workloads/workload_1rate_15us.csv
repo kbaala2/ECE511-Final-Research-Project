@@ -1,0 +1,17 @@
+net_idx,inject_time_us,network,num_inputs
+1,0,resnet50,1
+2,0,mobilenet_v3,3
+3,1,resnet34,2
+4,1,resnet34,3
+5,1,alexnet,2
+6,4,mobilenet_v3,1
+7,6,resnet50,1
+8,6,resnet50,2
+9,6,resnet18,3
+10,7,resnet18,3
+11,9,resnet34,2
+12,10,resnet18,2
+13,10,alexnet,2
+14,10,alexnet,1
+15,12,resnet50,3
+16,13,resnet18,2

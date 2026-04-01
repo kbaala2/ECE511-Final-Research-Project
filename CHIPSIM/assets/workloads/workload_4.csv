@@ -1,0 +1,5 @@
+net_idx,inject_time_us,network,num_inputs
+1,0,vgg16,1
+2,0,alexnet,1
+3,0,alexnet,1
+4,1000,alexnet,1

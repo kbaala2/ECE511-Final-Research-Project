@@ -1,0 +1,410 @@
+chiplet:
+
+  chiplet_1:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 2.5
+
+    layout_blocks: &id001
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 1.5
+        length_y: 1.5
+        max_power: 2000
+
+  chiplet_2:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_3:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_4:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_5:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_6:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_7:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_8:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_9:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_10:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 2.5
+    layout_blocks: *id001
+  chiplet_11:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_12:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_13:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_14:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_15:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_16:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_17:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_18:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_19:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_20:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 5.5
+    layout_blocks: *id001
+  chiplet_21:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_22:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_23:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_24:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_25:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_26:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_27:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_28:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_29:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_30:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 8.5
+    layout_blocks: *id001
+  chiplet_31:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_32:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_33:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_34:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_35:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_36:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_37:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_38:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_39:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_40:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 11.5
+    layout_blocks: *id001
+  chiplet_41:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_42:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_43:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_44:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_45:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_46:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_47:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_48:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_49:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_50:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 14.5
+    layout_blocks: *id001
+  chiplet_51:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_52:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_53:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_54:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_55:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_56:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_57:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_58:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_59:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_60:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 17.5
+    layout_blocks: *id001
+  chiplet_61:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_62:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_63:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_64:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_65:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_66:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_67:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_68:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_69:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_70:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 20.5
+    layout_blocks: *id001
+  chiplet_71:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_72:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_73:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_74:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_75:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_76:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_77:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_78:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_79:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_80:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 23.5
+    layout_blocks: *id001
+  chiplet_81:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_82:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_83:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_84:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_85:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_86:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_87:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_88:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_89:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_90:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 26.5
+    layout_blocks: *id001
+  chiplet_91:
+    start_chiplet_x: 2.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_92:
+    start_chiplet_x: 5.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_93:
+    start_chiplet_x: 8.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_94:
+    start_chiplet_x: 11.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_95:
+    start_chiplet_x: 14.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_96:
+    start_chiplet_x: 17.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_97:
+    start_chiplet_x: 20.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_98:
+    start_chiplet_x: 23.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_99:
+    start_chiplet_x: 26.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001
+  chiplet_100:
+    start_chiplet_x: 29.5
+    start_chiplet_y: 29.5
+    layout_blocks: *id001

@@ -1,0 +1,352 @@
+# distance in mm
+# power in W
+# distribution in csv file would be in % so here we mention max power
+# for homogeneous chiplets, only start_chiplet_x and start_chiplet_y is being used from this file
+# for hetrogeneous distribution, length_chiplet_x and length_chiplet_y, nodes_x and nodes_y are also being used
+
+# for each block added extra field called material which can overwright layer material properties for the perticular block
+# if block is not power source, don't define layout_blocks -> after this update tool won't search for power sequence 
+
+chiplet:
+  io_23: &io_chiplet
+    start_chiplet_x: 0
+    start_chiplet_y: 2.5
+    length_chiplet_x: 2
+    length_chiplet_y: 6
+    nodes_x: 1
+    nodes_y: 3
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 2
+        length_y: 6
+        max_power: 2 #W update with accurate
+  
+  io_24:
+    <<: *io_chiplet
+    start_chiplet_x: 0
+    start_chiplet_y: 10.5
+  
+  io_25:
+    <<: *io_chiplet
+    start_chiplet_x: 21
+    start_chiplet_y: 2.5
+  
+  io_26:
+    <<: *io_chiplet
+    start_chiplet_x: 21
+    start_chiplet_y: 10.5
+  
+
+  standard_1: &standard_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 0.5
+    length_chiplet_x: 2
+    length_chiplet_y: 2
+    nodes_x: 2
+    nodes_y: 2
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 2
+        length_y: 2
+        max_power: 0.5 #W update with accurate
+  
+  standard_2:
+    <<: *standard_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 3.25
+  
+  standard_3:
+    <<: *standard_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 6
+  
+  standard_6:
+    <<: *standard_chiplet
+    start_chiplet_x: 5
+    start_chiplet_y: 0.5
+  
+  standard_7:
+    <<: *standard_chiplet
+    start_chiplet_x: 5
+    start_chiplet_y: 3.25
+  
+  standard_8:
+    <<: *standard_chiplet
+    start_chiplet_x: 5
+    start_chiplet_y: 6
+  
+  standard_9:
+    <<: *standard_chiplet
+    start_chiplet_x: 7.5
+    start_chiplet_y: 0.5
+  
+  standard_10:
+    <<: *standard_chiplet
+    start_chiplet_x: 7.5
+    start_chiplet_y: 3.25
+  
+  standard_11:
+    <<: *standard_chiplet
+    start_chiplet_x: 7.5
+    start_chiplet_y: 6
+  
+  standard_15:
+    <<: *standard_chiplet
+    start_chiplet_x: 10
+    start_chiplet_y: 6
+
+
+  adder_16: &adder_chiplet
+    start_chiplet_x: 12.8
+    start_chiplet_y: 6
+    length_chiplet_x: 3.5
+    length_chiplet_y: 3.5
+    nodes_x: 2
+    nodes_y: 2
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 3.5
+        length_y: 3.5
+        max_power: 0.5 #W update with accurate
+  
+  adder_17:
+    <<: *adder_chiplet
+    start_chiplet_x: 12.8
+    start_chiplet_y: 10.5
+  
+  adder_18:
+    <<: *adder_chiplet
+    start_chiplet_x: 12.8
+    start_chiplet_y: 15
+
+  adder_20:
+    <<: *adder_chiplet
+    start_chiplet_x: 17
+    start_chiplet_y: 6
+
+  adder_21:
+    <<: *adder_chiplet
+    start_chiplet_x: 17
+    start_chiplet_y: 10.5
+  
+  adder_22:
+    <<: *adder_chiplet
+    start_chiplet_x: 17
+    start_chiplet_y: 15
+
+
+  accumulator_4: &accumulator_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 8.75
+    length_chiplet_x: 4.5
+    length_chiplet_y: 4.5
+    nodes_x: 3
+    nodes_y: 3
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 4.5
+        length_y: 4.5
+        max_power: 3 #W update with accurate
+  
+  accumulator_5:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 14
+  
+  accumulator_12:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 7.5
+    start_chiplet_y: 8.75
+  
+  accumulator_13:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 7.5
+    start_chiplet_y: 14
+
+
+  adcless_14: &adcless_chiplet
+    start_chiplet_x: 10
+    start_chiplet_y: 0.5
+    length_chiplet_x: 5
+    length_chiplet_y: 5
+    nodes_x: 3
+    nodes_y: 3
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 5
+        length_y: 5
+        max_power: 0.5 #W update with accurate
+
+  adcless_19:
+    <<: *adcless_chiplet
+    start_chiplet_x: 15.5
+    start_chiplet_y: 0.5
+
+ubump: &id001
+
+  io_23: &io_ubump
+    start_chiplet_x: 0
+    start_chiplet_y: 2.5
+    length_chiplet_x: 2
+    length_chiplet_y: 6
+    nodes_x: 1
+    nodes_y: 2
+
+  io_24:
+    <<: *io_ubump
+    start_chiplet_x: 0
+    start_chiplet_y: 10.5
+  
+  io_25:
+    <<: *io_ubump
+    start_chiplet_x: 21
+    start_chiplet_y: 2.5
+  
+  io_26:
+    <<: *io_ubump
+    start_chiplet_x: 21
+    start_chiplet_y: 10.5
+  
+
+  standard_1: &standard_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 0.5
+    length_chiplet_x: 2
+    length_chiplet_y: 2
+    nodes_x: 1
+    nodes_y: 1
+
+  standard_2:
+    <<: *standard_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 3.25
+  
+  standard_3:
+    <<: *standard_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 6
+  
+  standard_6:
+    <<: *standard_ubump
+    start_chiplet_x: 5
+    start_chiplet_y: 0.5
+  
+  standard_7:
+    <<: *standard_ubump
+    start_chiplet_x: 5
+    start_chiplet_y: 3.25
+  
+  standard_8:
+    <<: *standard_ubump
+    start_chiplet_x: 5
+    start_chiplet_y: 6
+  
+  standard_9:
+    <<: *standard_ubump
+    start_chiplet_x: 7.5
+    start_chiplet_y: 0.5
+  
+  standard_10:
+    <<: *standard_ubump
+    start_chiplet_x: 7.5
+    start_chiplet_y: 3.25
+  
+  standard_11:
+    <<: *standard_ubump
+    start_chiplet_x: 7.5
+    start_chiplet_y: 6
+  
+  standard_15:
+    <<: *standard_ubump
+    start_chiplet_x: 10
+    start_chiplet_y: 6
+
+
+  adder_16: &adder_ubump
+    start_chiplet_x: 12.8
+    start_chiplet_y: 6
+    length_chiplet_x: 3.5
+    length_chiplet_y: 3.5
+    nodes_x: 1
+    nodes_y: 1
+
+  adder_17:
+    <<: *adder_ubump
+    start_chiplet_x: 12.8
+    start_chiplet_y: 10.5
+  
+  adder_18:
+    <<: *adder_ubump
+    start_chiplet_x: 12.8
+    start_chiplet_y: 15
+
+  adder_20:
+    <<: *adder_ubump
+    start_chiplet_x: 17
+    start_chiplet_y: 6
+
+  adder_21:
+    <<: *adder_ubump
+    start_chiplet_x: 17
+    start_chiplet_y: 10.5
+  
+  adder_22:
+    <<: *adder_ubump
+    start_chiplet_x: 17
+    start_chiplet_y: 15
+
+
+  accumulator_4: &accumulator_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 8.75
+    length_chiplet_x: 4.5
+    length_chiplet_y: 4.5
+    nodes_x: 2
+    nodes_y: 2
+
+  accumulator_5:
+    <<: *accumulator_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 14
+  
+  accumulator_12:
+    <<: *accumulator_ubump
+    start_chiplet_x: 7.5
+    start_chiplet_y: 8.75
+  
+  accumulator_13:
+    <<: *accumulator_ubump
+    start_chiplet_x: 7.5
+    start_chiplet_y: 14
+
+
+  adcless_14: &adcless_ubump
+    start_chiplet_x: 10
+    start_chiplet_y: 0.5
+    length_chiplet_x: 5
+    length_chiplet_y: 5
+    nodes_x: 2
+    nodes_y: 2
+
+  adcless_19:
+    <<: *adcless_ubump
+    start_chiplet_x: 15.5
+    start_chiplet_y: 0.5
+
+
+tim: *id001

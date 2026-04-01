@@ -1,0 +1,18 @@
+{{include_text('../problem_base.yaml')}}
+problem:
+  <<<: *problem_base
+  instance: {C: 768, M: 2304, P: 197}
+
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Fused QKV (3x Linear 768→768)
+  # These histograms symmetric and zero-centered (the centermost bin is the
+  # probability of zero). Histograms are normalized to sum to 1.0 and they have
+  # 2^N-1 bins for some integer N. Higher N yields higher-fidelity histograms,
+  # but also increases runtime & the size of YAML files. Encoding functions will
+  # upsample or downsample histograms depending on the bitwidth of the
+  # corresponding operands.
+  histograms:
+    Inputs:  [0.00392,0.00604,0.00823,0.0104,0.0141,0.0176,0.0223,0.0274,0.0322,0.039,0.0438,0.049,0.0537,0.0584,0.068,0.0895,0.0659,0.058,0.054,0.0489,0.0446,0.0378,0.0335,0.0273,0.0229,0.0184,0.0148,0.0114,0.0082,0.00614,0.00474]
+    Weights: [0.00480667,0.00653667,0.00893,0.0118667,0.0153667,0.0192333,0.0241333,0.0292333,0.035,0.0406333,0.0459333,0.0510333,0.0558333,0.0593,0.0611,0.0618,0.0610333,0.0591333,0.0556667,0.0514667,0.0460333,0.0408,0.0348,0.0293,0.0242333,0.0194333,0.0153,0.0117,0.00895,0.00670333,0.00469667]
+    Outputs: [0.00432333,0.00584333,0.00796667,0.0106733,0.0134,0.0176333,0.0222333,0.0271,0.0331333,0.0396667,0.0453,0.0509333,0.0564667,0.0614,0.0685333,0.0742333,0.0688667,0.0612333,0.0549333,0.0504333,0.0438333,0.0387,0.0331,0.0272667,0.0221,0.018,0.0138,0.0109433,0.00787,0.00587333,0.00431333]

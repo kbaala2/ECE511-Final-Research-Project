@@ -1,0 +1,938 @@
+# distance in mm
+# power in W
+# distribution in csv file would be in % so here we mention max power
+# for homogeneous chiplets, only start_chiplet_x and start_chiplet_y is being used from this file
+# for hetrogeneous distribution, length_chiplet_x and length_chiplet_y, nodes_x and nodes_y are also being used
+
+# for each block added extra field called material which can overwright layer material properties for the perticular block
+# if block is not power source, don't define layout_blocks -> after this update tool won't search for power sequence 
+
+chiplet:
+  io_79: &io_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 3.5
+    length_chiplet_x: 2
+    length_chiplet_y: 5
+    nodes_x: 1
+    nodes_y: 3
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 2
+        length_y: 5
+        max_power: 5 #W update with accurate
+  
+  io_80:
+    <<: *io_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 8.75
+  
+  io_81:
+    <<: *io_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 14
+  
+  io_82:
+    <<: *io_chiplet
+    start_chiplet_x: 2.5
+    start_chiplet_y: 19.25
+  
+  io_83:
+    <<: *io_chiplet
+    start_chiplet_x: 29
+    start_chiplet_y: 3.5
+
+  io_84:
+    <<: *io_chiplet
+    start_chiplet_x: 29
+    start_chiplet_y: 8.75
+  
+  io_85:
+    <<: *io_chiplet
+    start_chiplet_x: 29
+    start_chiplet_y: 14
+  
+  io_86:
+    <<: *io_chiplet
+    start_chiplet_x: 29
+    start_chiplet_y: 19.25
+  
+
+  standard_1: &standard_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 2.75
+    length_chiplet_x: 2
+    length_chiplet_y: 2
+    nodes_x: 2
+    nodes_y: 2
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 2
+        length_y: 2
+        max_power: 1 #W update with accurate
+  
+  standard_2:
+    <<: *standard_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 2.75
+  
+  standard_3:
+    <<: *standard_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 2.75
+  
+  standard_4:
+    <<: *standard_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 2.75
+  
+  standard_5:
+    <<: *standard_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 2.75
+  
+  standard_6:
+    <<: *standard_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 5
+
+  standard_7:
+    <<: *standard_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 5
+  
+  standard_8:
+    <<: *standard_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 5
+  
+  standard_9:
+    <<: *standard_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 5
+  
+  standard_10:
+    <<: *standard_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 5
+
+  standard_11:
+    <<: *standard_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 7.25
+
+  standard_12:
+    <<: *standard_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 7.25
+  
+  standard_13:
+    <<: *standard_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 7.25
+  
+  standard_14:
+    <<: *standard_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 7.25
+  
+  standard_15:
+    <<: *standard_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 7.25
+
+  standard_16:
+    <<: *standard_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 9.5
+
+  standard_17:
+    <<: *standard_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 9.5
+  
+  standard_18:
+    <<: *standard_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 9.5
+  
+  standard_19:
+    <<: *standard_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 9.5
+  
+  standard_20:
+    <<: *standard_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 9.5
+
+  standard_21:
+    <<: *standard_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 11.75
+
+  standard_22:
+    <<: *standard_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 11.75
+  
+  standard_23:
+    <<: *standard_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 11.75
+  
+  standard_24:
+    <<: *standard_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 11.75
+  
+  standard_25:
+    <<: *standard_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 11.75
+
+  accumulator_26: &accumulator_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 14
+    length_chiplet_x: 2
+    length_chiplet_y: 2
+    nodes_x: 2
+    nodes_y: 2
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 2
+        length_y: 2
+        max_power: 1 #W update with accurate
+  
+  accumulator_27:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 14
+  
+  accumulator_28:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 14
+  
+  accumulator_29:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 14
+
+  accumulator_30:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 14
+
+  accumulator_31:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 16.25
+  
+  accumulator_32:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 16.25
+  
+  accumulator_33:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 16.25
+  
+  accumulator_34:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 16.25
+
+  accumulator_35:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 16.25
+
+  accumulator_36:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 18.5
+  
+  accumulator_37:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 18.5
+  
+  accumulator_38:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 18.5
+  
+  accumulator_39:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 18.5
+
+  accumulator_40:
+    <<: *accumulator_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 18.5
+
+  adcless_41: &adcless_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 20.75
+    length_chiplet_x: 2
+    length_chiplet_y: 2
+    nodes_x: 2
+    nodes_y: 2
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 2
+        length_y: 2
+        max_power: 1 #W update with accurate
+  
+  adcless_42:
+    <<: *adcless_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 20.75
+
+  adcless_43:
+    <<: *adcless_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 20.75
+    
+  adcless_44:
+    <<: *adcless_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 20.75
+  
+  adcless_45:
+    <<: *adcless_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 20.75
+  
+  adcless_46:
+    <<: *adcless_chiplet
+    start_chiplet_x: 4.75
+    start_chiplet_y: 23
+
+  adcless_47:
+    <<: *adcless_chiplet
+    start_chiplet_x: 7
+    start_chiplet_y: 23
+
+  adcless_48:
+    <<: *adcless_chiplet
+    start_chiplet_x: 9.25
+    start_chiplet_y: 23
+    
+  adcless_49:
+    <<: *adcless_chiplet
+    start_chiplet_x: 11.5
+    start_chiplet_y: 23
+  
+  adcless_50:
+    <<: *adcless_chiplet
+    start_chiplet_x: 13.75
+    start_chiplet_y: 23
+  
+  sharedadc_51: &sharedadc_chiplet
+    start_chiplet_x: 16
+    start_chiplet_y: 2.75
+    length_chiplet_x: 3
+    length_chiplet_y: 3
+    nodes_x: 2
+    nodes_y: 2
+
+    layout_blocks:
+      chiplet:
+        start_point_x: 0
+        start_point_y: 0
+        length_x: 3
+        length_y: 3
+        max_power: 1 #W update with accurate
+
+  sharedadc_52:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 19.25
+    start_chiplet_y: 2.75
+
+  sharedadc_53:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 22.5
+    start_chiplet_y: 2.75
+
+  sharedadc_54:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 25.75
+    start_chiplet_y: 2.75
+
+  sharedadc_55:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 16
+    start_chiplet_y: 6
+  sharedadc_56:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 19.25
+    start_chiplet_y: 6
+  sharedadc_57:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 22.5
+    start_chiplet_y: 6
+  sharedadc_58:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 25.75
+    start_chiplet_y: 6
+  sharedadc_59:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 16
+    start_chiplet_y: 9.25
+
+  sharedadc_60:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 19.25
+    start_chiplet_y: 9.25
+
+  sharedadc_61:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 22.5
+    start_chiplet_y: 9.25
+
+  sharedadc_62:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 25.75
+    start_chiplet_y: 9.25
+
+  sharedadc_63:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 16
+    start_chiplet_y: 12.5
+
+  sharedadc_64:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 19.25
+    start_chiplet_y: 12.5
+
+  sharedadc_65:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 22.5
+    start_chiplet_y: 12.5
+
+  sharedadc_66:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 25.75
+    start_chiplet_y: 12.5
+
+  sharedadc_67:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 16
+    start_chiplet_y: 15.75
+
+  sharedadc_68:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 19.25
+    start_chiplet_y: 15.75
+
+  sharedadc_69:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 22.5
+    start_chiplet_y: 15.75
+
+  sharedadc_70:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 25.75
+    start_chiplet_y: 15.75
+
+  sharedadc_71:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 16
+    start_chiplet_y: 19
+
+  sharedadc_72:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 19.25
+    start_chiplet_y: 19
+
+  sharedadc_73:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 22.5
+    start_chiplet_y: 19
+
+  sharedadc_74:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 25.75
+    start_chiplet_y: 19
+
+  sharedadc_75:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 16
+    start_chiplet_y: 22.25
+
+  sharedadc_76:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 19.25
+    start_chiplet_y: 22.25
+
+  sharedadc_77:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 22.5
+    start_chiplet_y: 22.25
+
+  sharedadc_78:
+    <<: *sharedadc_chiplet
+    start_chiplet_x: 25.75
+    start_chiplet_y: 22.25
+
+
+ubump: &id001
+  io_79: &io_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 3.5
+    length_chiplet_x: 2
+    length_chiplet_y: 5
+    nodes_x: 1
+    nodes_y: 1
+
+  io_80:
+    <<: *io_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 8.75
+  
+  io_81:
+    <<: *io_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 14
+  
+  io_82:
+    <<: *io_ubump
+    start_chiplet_x: 2.5
+    start_chiplet_y: 19.25
+  
+  io_83:
+    <<: *io_ubump
+    start_chiplet_x: 29
+    start_chiplet_y: 3.5
+
+  io_84:
+    <<: *io_ubump
+    start_chiplet_x: 29
+    start_chiplet_y: 8.75
+  
+  io_85:
+    <<: *io_ubump
+    start_chiplet_x: 29
+    start_chiplet_y: 14
+  
+  io_86:
+    <<: *io_ubump
+    start_chiplet_x: 29
+    start_chiplet_y: 19.25
+  
+
+  standard_1: &standard_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 2.75
+    length_chiplet_x: 2
+    length_chiplet_y: 2
+    nodes_x: 1
+    nodes_y: 1
+
+  standard_2:
+    <<: *standard_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 2.75
+  
+  standard_3:
+    <<: *standard_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 2.75
+  
+  standard_4:
+    <<: *standard_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 2.75
+  
+  standard_5:
+    <<: *standard_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 2.75
+  
+  standard_6:
+    <<: *standard_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 5
+
+  standard_7:
+    <<: *standard_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 5
+  
+  standard_8:
+    <<: *standard_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 5
+  
+  standard_9:
+    <<: *standard_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 5
+  
+  standard_10:
+    <<: *standard_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 5
+
+  standard_11:
+    <<: *standard_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 7.25
+
+  standard_12:
+    <<: *standard_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 7.25
+  
+  standard_13:
+    <<: *standard_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 7.25
+  
+  standard_14:
+    <<: *standard_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 7.25
+  
+  standard_15:
+    <<: *standard_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 7.25
+
+  standard_16:
+    <<: *standard_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 9.5
+
+  standard_17:
+    <<: *standard_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 9.5
+  
+  standard_18:
+    <<: *standard_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 9.5
+  
+  standard_19:
+    <<: *standard_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 9.5
+  
+  standard_20:
+    <<: *standard_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 9.5
+
+  standard_21:
+    <<: *standard_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 11.75
+
+  standard_22:
+    <<: *standard_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 11.75
+  
+  standard_23:
+    <<: *standard_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 11.75
+  
+  standard_24:
+    <<: *standard_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 11.75
+  
+  standard_25:
+    <<: *standard_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 11.75
+
+  accumulator_26: &accumulator_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 14
+    length_chiplet_x: 2
+    length_chiplet_y: 2
+    nodes_x: 1
+    nodes_y: 1
+
+  accumulator_27:
+    <<: *accumulator_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 14
+  
+  accumulator_28:
+    <<: *accumulator_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 14
+  
+  accumulator_29:
+    <<: *accumulator_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 14
+
+  accumulator_30:
+    <<: *accumulator_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 14
+
+  accumulator_31:
+    <<: *accumulator_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 16.25
+  
+  accumulator_32:
+    <<: *accumulator_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 16.25
+  
+  accumulator_33:
+    <<: *accumulator_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 16.25
+  
+  accumulator_34:
+    <<: *accumulator_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 16.25
+
+  accumulator_35:
+    <<: *accumulator_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 16.25
+
+  accumulator_36:
+    <<: *accumulator_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 18.5
+  
+  accumulator_37:
+    <<: *accumulator_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 18.5
+  
+  accumulator_38:
+    <<: *accumulator_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 18.5
+  
+  accumulator_39:
+    <<: *accumulator_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 18.5
+
+  accumulator_40:
+    <<: *accumulator_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 18.5
+
+  adcless_41: &adcless_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 20.75
+    length_chiplet_x: 2
+    length_chiplet_y: 2
+    nodes_x: 1
+    nodes_y: 1
+
+  adcless_42:
+    <<: *adcless_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 20.75
+
+  adcless_43:
+    <<: *adcless_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 20.75
+    
+  adcless_44:
+    <<: *adcless_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 20.75
+  
+  adcless_45:
+    <<: *adcless_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 20.75
+  
+  adcless_46:
+    <<: *adcless_ubump
+    start_chiplet_x: 4.75
+    start_chiplet_y: 23
+
+  adcless_47:
+    <<: *adcless_ubump
+    start_chiplet_x: 7
+    start_chiplet_y: 23
+
+  adcless_48:
+    <<: *adcless_ubump
+    start_chiplet_x: 9.25
+    start_chiplet_y: 23
+    
+  adcless_49:
+    <<: *adcless_ubump
+    start_chiplet_x: 11.5
+    start_chiplet_y: 23
+  
+  adcless_50:
+    <<: *adcless_ubump
+    start_chiplet_x: 13.75
+    start_chiplet_y: 23
+  
+  sharedadc_51: &sharedadc_ubump
+    start_chiplet_x: 16
+    start_chiplet_y: 2.75
+    length_chiplet_x: 3
+    length_chiplet_y: 3
+    nodes_x: 1
+    nodes_y: 1
+
+  sharedadc_52:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 19.25
+    start_chiplet_y: 2.75
+
+  sharedadc_53:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 22.5
+    start_chiplet_y: 2.75
+
+  sharedadc_54:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 25.75
+    start_chiplet_y: 2.75
+
+  sharedadc_55:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 16
+    start_chiplet_y: 6
+  sharedadc_56:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 19.25
+    start_chiplet_y: 6
+  sharedadc_57:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 22.5
+    start_chiplet_y: 6
+  sharedadc_58:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 25.75
+    start_chiplet_y: 6
+  sharedadc_59:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 16
+    start_chiplet_y: 9.25
+
+  sharedadc_60:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 19.25
+    start_chiplet_y: 9.25
+
+  sharedadc_61:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 22.5
+    start_chiplet_y: 9.25
+
+  sharedadc_62:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 25.75
+    start_chiplet_y: 9.25
+
+  sharedadc_63:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 16
+    start_chiplet_y: 12.5
+
+  sharedadc_64:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 19.25
+    start_chiplet_y: 12.5
+
+  sharedadc_65:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 22.5
+    start_chiplet_y: 12.5
+
+  sharedadc_66:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 25.75
+    start_chiplet_y: 12.5
+
+  sharedadc_67:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 16
+    start_chiplet_y: 15.75
+
+  sharedadc_68:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 19.25
+    start_chiplet_y: 15.75
+
+  sharedadc_69:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 22.5
+    start_chiplet_y: 15.75
+
+  sharedadc_70:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 25.75
+    start_chiplet_y: 15.75
+
+  sharedadc_71:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 16
+    start_chiplet_y: 19
+
+  sharedadc_72:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 19.25
+    start_chiplet_y: 19
+
+  sharedadc_73:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 22.5
+    start_chiplet_y: 19
+
+  sharedadc_74:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 25.75
+    start_chiplet_y: 19
+
+  sharedadc_75:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 16
+    start_chiplet_y: 22.25
+
+  sharedadc_76:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 19.25
+    start_chiplet_y: 22.25
+
+  sharedadc_77:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 22.5
+    start_chiplet_y: 22.25
+
+  sharedadc_78:
+    <<: *sharedadc_ubump
+    start_chiplet_x: 25.75
+    start_chiplet_y: 22.25
+
+
+tim: *id001

@@ -1,0 +1,18 @@
+{{include_text('../problem_base.yaml')}}
+problem:
+  <<<: *problem_base
+  instance: {C: 512, M: 1000}
+
+  name: Linear
+  dnn_name: resnet34
+  notes: Linear
+  # These histograms symmetric and zero-centered (the centermost bin is the
+  # probability of zero). Histograms are normalized to sum to 1.0 and they have
+  # 2^N-1 bins for some integer N. Higher N yields higher-fidelity histograms,
+  # but also increases runtime & the size of YAML files. Encoding functions will
+  # upsample or downsample histograms depending on the bitwidth of the
+  # corresponding operands.
+  histograms:
+    Inputs: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.0636537,0.0742996,0.0640191,0.0579584,0.0528982,0.0488844,0.0453459,0.0420469,0.0391889,0.0363707,0.0338408,0.0315219,0.0293381,0.0272297,0.0254385,0.0235563]
+    Weights: [0,0,0,0,0,0,0,0,0,0,0,1.17188e-05,0.000337891,0.0169277,0.302283,0.458436,0.150062,0.0447598,0.0168066,0.00666406,0.00252734,0.000818359,0.000255859,7.22656e-05,2.73438e-05,5.85938e-06,3.90625e-06,0,0,0,0]
+    Outputs: [0.0095133,0.0094819,0.0095805,0.0095224,0.0096101,0.0095255,0.0095959,0.0095845,0.0094988,0.0094667,0.0095232,0.0094071,0.0093315,0.0093123,0.0092469,0.0091808,0.0091738,0.0090584,0.0090037,0.0089215,0.0088331,0.0088258,0.0086687,0.0086072,0.0085461,0.0084595,0.008307,0.0082586,0.008172,0.0080517,0.0079058]

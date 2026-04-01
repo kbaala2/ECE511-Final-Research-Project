@@ -1,0 +1,62 @@
+# ==============================================================================
+# Chiplet Simulator Configuration
+# ==============================================================================
+
+# ==============================================================================
+# SIMULATION PARAMETERS
+# ==============================================================================
+
+simulation:
+  # Input Files
+  input_files:
+    workload: "workload_1rate_10us.csv"
+    adj_matrix: "adj_matrix_10x10_mesh.csv"
+    chiplet_mapping: "mapping_100_cmos_with_io.yaml"
+    model_defs: "model_definitions.py"
+  
+  # Core Simulation Settings
+  core_settings:
+    clear_cache: false
+    comm_simulator: "Garnet"  # Options: 'Garnet' or 'Booksim'
+    comm_method: "non-pipelined"  # Options: 'pipelined' or 'non-pipelined'
+    enable_dsent: true
+    enable_comm_cache: true
+    blocking_age_threshold: 10
+    weight_stationary: true
+    weight_loading_strategy: "all_at_once"  # Options: "all_at_once" or "just_in_time"
+  
+  # Hardware Parameters
+  hardware_parameters:
+    bits_per_activation: 8
+    bits_per_packet: 128
+    network_operation_frequency_hz: 1000000000
+  
+  # Gem5-Specific Parameters (change infrequently)
+  gem5_parameters:
+    gem5_sim_cycles: 500000000
+    gem5_injection_rate: 0.0
+    gem5_ticks_per_cycle: 1000
+    gem5_deadlock_threshold: null
+  
+  # DSENT Parameters
+  dsent_parameters:
+    dsent_tech_node: "32"
+
+# ==============================================================================
+# POST-PROCESSING PARAMETERS
+# ==============================================================================
+
+post_processing:
+  # Warmup filtering
+  warmup_period_us: 0.0
+  # Cooldown filtering (exclude last X microseconds)
+  cooldown_period_us: 0.0
+  
+  # Supplementary communication simulations
+  run_wkld_agg_comm: false      # Workload aggregate communication
+  run_ind_comm: false            # Individual layer communication
+  run_net_agg_comm: false        # Network aggregate communication
+  
+  # Output generation
+  generate_plots: true           # Generate utilization, power plots
+  generate_visualizations: true # Generate network mapping visualizations

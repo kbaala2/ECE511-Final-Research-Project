@@ -1,0 +1,790 @@
+# Auto-generated summary of problem metadata for vision_transformer
+# Contains: file, name, dnn_name, notes, instance
+- file: "00.yaml"
+  name: Conv2d
+  dnn_name: vision_transformer
+  notes: Conv2d
+  instance:
+    C: 3
+    M: 768
+    P: 14
+    Q: 14
+    R: 16
+    S: 16
+    HStride: 16
+    WStride: 16
+- file: "01.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "02.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "03.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "04.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "05.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "06.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "07.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "08.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "09.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "10.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "11.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "12.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "13.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "14.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "15.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "16.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "17.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "18.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "19.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "20.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "21.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "22.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "23.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "24.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "25.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "26.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "27.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "28.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "29.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "30.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "31.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "32.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "33.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "34.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "35.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "36.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "37.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "38.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "39.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "40.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "41.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "42.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "43.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "44.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "45.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "46.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "47.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "48.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "49.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "50.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "51.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "52.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "53.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "54.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "55.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "56.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "57.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "58.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "59.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "60.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "61.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "62.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "63.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "64.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "65.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "66.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "67.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "68.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "69.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "70.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "71.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "72.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "73.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "74.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "75.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "76.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "77.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "78.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "79.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "80.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "81.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "82.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "83.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "84.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "85.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "86.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "87.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "88.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "89.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "90.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "91.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "92.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 64
+    C: 197
+    P: 12
+- file: "93.yaml"
+  name: ViTSelfAttention
+  dnn_name: vision_transformer
+  notes: From einsum
+  instance:
+    M: 197
+    C: 197
+    P: 12
+- file: "94.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 768
+    P: 197
+- file: "95.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 3072
+    P: 197
+- file: "96.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 3072
+    M: 768
+    P: 197
+- file: "97.yaml"
+  name: Linear
+  dnn_name: vision_transformer
+  notes: Linear
+  instance:
+    C: 768
+    M: 1000

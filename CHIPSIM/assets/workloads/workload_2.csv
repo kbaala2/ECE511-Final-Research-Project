@@ -1,0 +1,2 @@
+net_idx,inject_time_us,network,num_inputs
+1,0,vgg16,1

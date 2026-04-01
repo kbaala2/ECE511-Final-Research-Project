@@ -1,0 +1,4 @@
+net_idx,inject_time_us,network,num_inputs
+1,18,vgg16,9
+2,34,vgg16,8
+
