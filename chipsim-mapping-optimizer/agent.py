@@ -22,7 +22,7 @@ load_dotenv()
 # ---------------------------------------------------------------
 # CONFIGURATION — update these paths for your environment
 # ---------------------------------------------------------------
-CHIPSIM_ROOT = "/home/rbaala2/CHIPSIM"
+CHIPSIM_ROOT = "/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM"
 MAPPER_PATH = f"{CHIPSIM_ROOT}/src/mapping/model_mapper.py"
 MAPPER_ORIGINAL_PATH = f"{CHIPSIM_ROOT}/src/mapping/model_mapper_original.py"
 PARTITIONER_PATH = f"{CHIPSIM_ROOT}/src/mapping/layer_partitioner.py"
@@ -379,55 +379,38 @@ def inject_into_mapper(state: ChipSimState) -> dict:
     # Strategy: find _get_mapper_function line by line, locate the "else:" 
     # that belongs to the if/elif chain, and insert our elif before it.
     # This works regardless of what the backup file looks like.
-    if f'"{public_name}"' not in modified:
-        lines = modified.split('\n')
-        new_lines = []
-        in_get_mapper = False
-        injected = False
-        if_elif_depth = 0
+    target_elif_statement = f'elif self.mapping_function == "{public_name}":'
+    if target_elif_statement not in modified:
+            lines = modified.split('\n')
+            new_lines = []
+            injected = False
+            anchor_string = "return self._nearest_neighbor_mapper_v3"
 
-        for i, line in enumerate(lines):
-            # Detect entry into _get_mapper_function
-            if 'def _get_mapper_function(self)' in line:
-                in_get_mapper = True
-                if_elif_depth = 0
+            for line in lines:
+                # Always add the current line first
                 new_lines.append(line)
-                continue
-
-            # Detect exit (next method definition at same or lower indent)
-            if in_get_mapper and not injected:
-                stripped = line.lstrip()
-
-                # Track the if/elif chain
-                if stripped.startswith('if self.mapping_function'):
-                    if_elif_depth = 1
-                elif stripped.startswith('elif self.mapping_function'):
-                    if_elif_depth += 1
-
-                # Found the else: that terminates the if/elif chain
-                if if_elif_depth > 0 and stripped.startswith('else:'):
-                    # Get the indentation of this else line
-                    indent = line[:len(line) - len(stripped)]
-                    # Insert our elif before this else
-                    new_lines.append(f'{indent}elif self.mapping_function == "{public_name}":')
-                    new_lines.append(f'{indent}    return self.{method_name}')
+                
+                # If we hit our anchor, inject the new routing right after it
+                if anchor_string in line and not injected:
+                    # Calculate indentation dynamically based on the anchor line
+                    return_indent_level = len(line) - len(line.lstrip())
+                    elif_indent_level = max(0, return_indent_level - 4)
+                    
+                    indent_elif = ' ' * elif_indent_level
+                    indent_return = ' ' * return_indent_level
+                    
+                    # Inject the new elif block
+                    new_lines.append(f'{indent_elif}elif self.mapping_function == "{public_name}":')
+                    new_lines.append(f'{indent_return}return self.{method_name}')
+                    
                     injected = True
-                    in_get_mapper = False
 
-            new_lines.append(line)
-
-        if injected:
-            modified = '\n'.join(new_lines)
-            print(f"  _get_mapper_function: elif for '{public_name}' injected successfully")
-        else:
-            print(f"  _get_mapper_function: INJECTION FAILED")
-            print(f"    Could not find the if/elif/else chain in _get_mapper_function")
-            # Dump the method for debugging
-            idx = modified.find('def _get_mapper_function')
-            if idx != -1:
-                end = modified.find('\n    def ', idx + 1)
-                snippet = modified[idx:end] if end != -1 else modified[idx:idx+500]
-                print(f"    Method content:\n{snippet}")
+            if injected:
+                modified = '\n'.join(new_lines)
+                print(f"  _get_mapper_function: elif for '{public_name}' injected successfully")
+            else:
+                print(f"  _get_mapper_function: INJECTION FAILED")
+                print(f"    Could not find the anchor string: '{anchor_string}'")
     else:
         print(f"  _get_mapper_function: elif for '{public_name}' already present")
 
