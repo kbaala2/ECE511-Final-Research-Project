@@ -1,0 +1,64 @@
+================================================================================
+System Utilization Metrics
+================================================================================
+
+
+System-Wide Metrics:
+--------------------------------------------------
+  Time Step Used for Analysis: 1.00 μs
+  Mean Per-Chiplet Compute Time Utilization (Method 1): 2.64 %
+  Mean Per-Chiplet Activation Communication Time Utilization (Method 1): 0.01 %
+  Mean Per-Chiplet Weight Loading Time Utilization (Method 1): 94.45 %
+  Mean Per-Chiplet Combined Time Utilization (Method 1): 94.47 %
+
+Total Compute Utilization (Method 1):
+--------------------------------------------------
+  Compute Time Based Utilization (Per Chiplet):
+
+  +------------+-------------------------+-----------------------+
+  | Chiplet ID | Total Compute Time (μs) | Utilization (%)       |
+  +------------+-------------------------+-----------------------+
+  | 2          | 180.79                  | 9.60                  |
+  | 3          | 0.14                    | 0.01                  |
+  | 11         | 0.92                    | 0.05                  |
+  | 12         | 17.20                   | 0.91                  |
+  +------------+-------------------------+-----------------------+
+
+Total Activation Communication Utilization (Method 1):
+--------------------------------------------------
+  Activation Communication Time Based Utilization (Per Chiplet):
+
+  +------------+------------------------------------------+----------------------+
+  | Chiplet ID | Total Activation Communication Time (μs) | Utilization (%)      |
+  +------------+------------------------------------------+----------------------+
+  | 2          | 0.33                                     | 0.02                 |
+  | 3          | 0.25                                     | 0.01                 |
+  | 11         | 0.00                                     | 0.00                 |
+  | 12         | 0.40                                     | 0.02                 |
+  +------------+------------------------------------------+----------------------+
+
+Total Weight Loading Utilization (Method 1):
+--------------------------------------------------
+  Weight Loading Time Based Utilization (Per Chiplet):
+
+  +------------+--------------------------------+-------------------+
+  | Chiplet ID | Total Weight Loading Time (μs) | Utilization (%)   |
+  +------------+--------------------------------+-------------------+
+  | 2          | 100498.02                      | 100.00            |
+  | 3          | 1674.97                        | 88.90             |
+  | 11         | 1674.97                        | 88.90             |
+  | 12         | 6699.87                        | 100.00            |
+  +------------+--------------------------------+-------------------+
+
+Total Combined Utilization (Method 1):
+--------------------------------------------------
+  Combined Busy Time Based Utilization (Per Chiplet) - Compute + Activation Communication + Weight Loading:
+
+  +------------+-------------------------------+-------------------+
+  | Chiplet ID | Total Combined Busy Time (μs) | Utilization (%)   |
+  +------------+-------------------------------+-------------------+
+  | 2          | 100679.14                     | 100.00            |
+  | 3          | 1675.36                       | 88.93             |
+  | 11         | 1675.89                       | 88.95             |
+  | 12         | 6717.47                       | 100.00            |
+  +------------+-------------------------------+-------------------+

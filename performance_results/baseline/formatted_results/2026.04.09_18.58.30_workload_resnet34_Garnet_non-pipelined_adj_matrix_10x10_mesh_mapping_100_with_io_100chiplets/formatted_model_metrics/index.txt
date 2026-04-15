@@ -1,0 +1,10 @@
+================================================================================
+INDEX: All Models
+================================================================================
+
+Workload: workload_resnet34.csv
+Communication Simulator: Garnet
+Communication Method: non-pipelined
+
+Contents (files/subdirectories listed below correspond to items in this directory):
+  - Model 1: resnet34

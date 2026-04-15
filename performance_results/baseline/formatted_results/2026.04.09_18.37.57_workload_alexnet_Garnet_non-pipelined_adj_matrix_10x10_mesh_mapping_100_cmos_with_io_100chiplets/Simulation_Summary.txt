@@ -1,0 +1,36 @@
+================================================================================
+Simulation Summary
+================================================================================
+
+
+Configuration:
+--------------------------------------------------
+  Workload: workload_alexnet.csv 
+  Adjacency Matrix: adj_matrix_10x10_mesh.csv 
+  Chiplet Mapping: mapping_100_cmos_with_io.yaml 
+  Communication Simulator: Garnet 
+  Communication Method: non-pipelined 
+  Mapping Function: nearest_neighbor_v3 
+
+Timing:
+--------------------------------------------------
+  Simulation Wall Clock Time: 2.82 seconds
+  Total Models Processed: 1.00
+  Simulation Runtime: 14225.92 μs
+
+Models:
+--------------------------------------------------
+  Models By Start Time:
+
+  +----------+---------+-----------------+
+  | Model ID | Name    | Start Time (μs) |
+  +----------+---------+-----------------+
+  | 1        | alexnet | 0.00            |
+  +----------+---------+-----------------+
+  Models by Completion Time:
+
+  +----------+---------+----------------------+---------------+
+  | Model ID | Name    | Completion Time (μs) | Duration (μs) |
+  +----------+---------+----------------------+---------------+
+  | 1        | alexnet | 14225.92             | 14225.92      |
+  +----------+---------+----------------------+---------------+

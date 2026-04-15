@@ -1,0 +1,10 @@
+================================================================================
+System-Wide Energy Summary
+================================================================================
+
+
+System-Wide Energy Summary:
+--------------------------------------------------
+  Total System Energy: 35.71 μJ
+  Total System Compute Energy: 35.71 μJ
+  Total System Communication Energy: 0.00 μJ

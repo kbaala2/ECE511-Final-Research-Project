@@ -1,0 +1,10 @@
+================================================================================
+INDEX: All Models
+================================================================================
+
+Workload: workload_alexnet.csv
+Communication Simulator: Garnet
+Communication Method: pipelined
+
+Contents (files/subdirectories listed below correspond to items in this directory):
+  - Model 1: alexnet
