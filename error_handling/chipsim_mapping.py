@@ -14,10 +14,8 @@ import shutil
 from dotenv import load_dotenv
 from typing import TypedDict, Optional
 from langchain_groq import ChatGroq
-from typing import TypedDict, Optional, Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
-import subprocess
 
 load_dotenv()
 
@@ -55,8 +53,18 @@ else:
 # ---------------------------------------------------------------
 # 1. DEFINE STATE
 # ---------------------------------------------------------------
+# class ChipSimState(TypedDict):
+#     user_request: str
+#     config_analysis: str
+#     mapping_source_code: str
+#     mapping_proposal: str        # raw LLM output (just the function code)
+#     function_name: str            # extracted function name
+#     validation_errors: list
+#     is_valid: bool
+#     injected_file_path: str       # path to the modified model_mapper.py
+#     retry_count: int
+
 class ChipSimState(TypedDict):
-    #objects for validation
     user_request: str
     config_analysis: str
     mapping_source_code: str
@@ -67,25 +75,15 @@ class ChipSimState(TypedDict):
     injected_file_path: str       # path to the modified model_mapper.py
     retry_count: int
 
-    #objects for runtime 
-    iteration: int
-    max_iterations: int
-
-    target_file_path: str
     run_command: list[str]
     run_cwd: Optional[str]
-
-    current_working_code: str
-    proposed_code: str
-    failed_code: Optional[str]
-
-    run_succeeded: bool
     runtime_error: Optional[str]
     latest_output: Optional[str]
-
-    should_continue: bool
-    history: list[dict[str, Any]]
-
+    failed_code: Optional[str]
+    execution_succeeded: bool
+    history: list[dict]
+    original_mapper_code: str
+    runtime_retry_count: int
 
 # ---------------------------------------------------------------
 # 2. CREATE THE LLM
@@ -253,80 +251,6 @@ def validate_proposal(state: ChipSimState) -> dict:
             "function_name": "",
             "retry_count": state.get("retry_count", 0) + 1,
         }
-
-#-------------------------------------------------------------------------
-
-# Add new node here
-def runtime_test(state: ChipSimState) -> dict:
-    history = state.get("history", [])
-    iteration = state.get("iteration", 0) + 1
-
-    try:
-        result = subprocess.run(
-            state["run_command"],
-            cwd=state.get("run_cwd"),
-            capture_output=True,
-            text=True,
-            timeout=20
-        )
-    except subprocess.TimeoutExpired:
-        msg = "Execution timed out after 20 seconds."
-        history.append({
-            "iteration": iteration,
-            "outcome": "RUNTIME_ERROR",
-            "error": msg[:1000],
-        })
-        return {
-            "iteration": iteration,
-            "history": history,
-            "run_succeeded": False,
-            "runtime_error": msg,
-            "latest_output": None,
-        }
-    except Exception as e:
-        msg = f"Execution failed unexpectedly:\n{e}"
-        history.append({
-            "iteration": iteration,
-            "outcome": "RUNTIME_ERROR",
-            "error": msg[:1000],
-        })
-        return {
-            "iteration": iteration,
-            "history": history,
-            "run_succeeded": False,
-            "runtime_error": msg,
-            "latest_output": None,
-        }
-
-    if result.returncode != 0:
-        error_text = (result.stderr or result.stdout or "")[-3000:]
-        history.append({
-            "iteration": iteration,
-            "outcome": "RUNTIME_ERROR",
-            "error": error_text[:1000],
-        })
-        return {
-            "iteration": iteration,
-            "history": history,
-            "run_succeeded": False,
-            "runtime_error": error_text,
-            "latest_output": result.stdout,
-        }
-
-    history.append({
-        "iteration": iteration,
-        "outcome": "SUCCESS",
-        "output": result.stdout,
-    })
-    return {
-        "iteration": iteration,
-        "history": history,
-        "run_succeeded": True,
-        "runtime_error": None,
-        "latest_output": result.stdout,
-    }
-
-#-------------------------------------------------------------------------
 
     # --- 2. Check there's exactly one function definition ---
     func_nodes = [n for n in ast.iter_child_nodes(tree)
@@ -558,13 +482,6 @@ def route_after_validation(state: ChipSimState) -> str:
         return "give_up"
     return "retry"
 
-def runtime_decision(state: ChipSimState) -> str:
-    if state.get("run_succeeded", False):
-        return "done"
-    if state.get("iteration", 0) >= state.get("max_iterations", 0):
-        return "done"
-    return "retry"
-
 
 # ---------------------------------------------------------------
 # 6. BUILD THE GRAPH
@@ -577,35 +494,10 @@ graph_builder.add_node("optimizer", propose_mapping)
 graph_builder.add_node("validator", validate_proposal)
 graph_builder.add_node("injector", inject_into_mapper)
 
-# ---------------------------------------------------------------
-# Code for runtime error handling
-
-graph_builder.add_node("runtime_test", runtime_test)
-
-# Finished code for runtime error handling
-#----------------------------------------------------------------
-
 # Edges
 graph_builder.add_edge(START, "analyzer")
 graph_builder.add_edge("analyzer", "optimizer")
 graph_builder.add_edge("optimizer", "validator")
-
-#----------------------------------------------------------------
-# Code for adding edges for runtime error handling
-
-graph_builder.add_edge("injector", "runtime_test")
-graph_builder.add_edge("runtime_test","optimizer")
-
-graph_builder.add_conditional_edges(
-    "runtime_test",
-    runtime_decision,
-    {
-        "retry": "optimizer",
-        "done": END,
-    }
-)
-
-#----------------------------------------------------------------
 
 # Conditional: validator decides next step
 graph_builder.add_conditional_edges(
@@ -615,15 +507,6 @@ graph_builder.add_conditional_edges(
         "inject": "injector",       # valid → inject into model_mapper.py
         "retry": "optimizer",       # invalid → retry with error feedback
         "give_up": END,             # too many retries → stop
-    }
-)
-
-graph_builder.add_conditional_edges(
-    "runtime_handler_rerun",
-    runtime_decision,
-    {
-        "retry": "runtime_handler_propose",
-        "done": END,
     }
 )
 
@@ -665,13 +548,6 @@ if __name__ == "__main__":
         "is_valid": False,
         "injected_file_path": "",
         "retry_count": 0,
-
-        "iteration": 0,
-        "max_iterations": 3,
-        "target_file_path": "last_generated_mapper.py",
-        "run_command": ["python3", "last_generated_mapper.py"],
-        "run_cwd": None,
-        "history": [],
     })
 
     # --- Print results ---
