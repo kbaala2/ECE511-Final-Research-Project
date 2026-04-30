@@ -1,0 +1,11 @@
+================================================================================
+INDEX: Energy Metrics
+================================================================================
+
+Workload: workload_resnet50.csv
+Communication Simulator: Garnet
+Communication Method: non-pipelined
+
+Contents (files/subdirectories listed below correspond to items in this directory):
+  - System-Wide Energy Summary
+  - Per-Chiplet Energy Consumption

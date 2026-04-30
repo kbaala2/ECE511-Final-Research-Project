@@ -1,0 +1,36 @@
+================================================================================
+Simulation Summary
+================================================================================
+
+
+Configuration:
+--------------------------------------------------
+  Workload: workload_resnet50.csv 
+  Adjacency Matrix: adj_matrix_10x10_mesh.csv 
+  Chiplet Mapping: mapping_100_hetero_center_imc.yaml 
+  Communication Simulator: Garnet 
+  Communication Method: non-pipelined 
+  Mapping Function: nearest_neighbor_v3 
+
+Timing:
+--------------------------------------------------
+  Simulation Wall Clock Time: 11.88 seconds
+  Total Models Processed: 1.00
+  Simulation Runtime: 12794.70 μs
+
+Models:
+--------------------------------------------------
+  Models By Start Time:
+
+  +----------+----------+-----------------+
+  | Model ID | Name     | Start Time (μs) |
+  +----------+----------+-----------------+
+  | 1        | resnet50 | 0.00            |
+  +----------+----------+-----------------+
+  Models by Completion Time:
+
+  +----------+----------+----------------------+--------------------+
+  | Model ID | Name     | Completion Time (μs) | Duration (μs)      |
+  +----------+----------+----------------------+--------------------+
+  | 1        | resnet50 | 12794.70             | 12794.70           |
+  +----------+----------+----------------------+--------------------+

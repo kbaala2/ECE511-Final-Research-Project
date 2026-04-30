@@ -1,0 +1,34 @@
+simulation:
+  input_files:
+    workload: workload_vgg16.csv
+    adj_matrix: adj_matrix_10x10_mesh.csv
+    chiplet_mapping: mapping_100_hetero_checkerboard.yaml
+    model_defs: model_definitions.py
+  core_settings:
+    clear_cache: false
+    comm_simulator: Garnet
+    comm_method: non-pipelined
+    enable_dsent: false
+    enable_comm_cache: true
+    blocking_age_threshold: 10
+    weight_stationary: true
+    weight_loading_strategy: all_at_once
+  hardware_parameters:
+    bits_per_activation: 8
+    bits_per_packet: 128
+    network_operation_frequency_hz: 1000000000
+  gem5_parameters:
+    gem5_sim_cycles: 500000000
+    gem5_injection_rate: 0.0
+    gem5_ticks_per_cycle: 1000
+    gem5_deadlock_threshold: null
+  dsent_parameters:
+    dsent_tech_node: '32'
+post_processing:
+  warmup_period_us: 0.0
+  cooldown_period_us: 0.0
+  run_wkld_agg_comm: false
+  run_ind_comm: false
+  run_net_agg_comm: false
+  generate_plots: true
+  generate_visualizations: false
