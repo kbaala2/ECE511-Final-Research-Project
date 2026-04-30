@@ -1,37 +1,44 @@
 """
 CHIPSIM Mapping Optimizer Agent
 ================================
-Two-agent LangGraph pipeline with pre-simulation validation and
-automatic injection into model_mapper.py.
+Two-agent LangGraph pipeline with pre-simulation validation, automatic
+injection into model_mapper.py, and runtime retry on simulator failures.
 
-Flow: START → analyzer → optimizer → validate → (inject or retry) → END
+Flow: START → analyzer → optimizer → validator → (inject or retry)
+                                          ↓
+                                       injector → runtime_handler → (END or retry → optimizer)
 """
+
+# this code is agent.py
+
 import os
 import re
 import ast
 import yaml
 import shutil
+import subprocess
 from dotenv import load_dotenv
-from typing import TypedDict, Optional
-from langchain_groq import ChatGroq
 from typing import TypedDict, Optional, Any
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
-import subprocess
 
 load_dotenv()
 
 # ---------------------------------------------------------------
 # CONFIGURATION — update these paths for your environment
 # ---------------------------------------------------------------
-CHIPSIM_ROOT = "/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM"
+CHIPSIM_ROOT = "/home/ECE511-Final-Research-Project/CHIPSIM"
 MAPPER_PATH = f"{CHIPSIM_ROOT}/src/mapping/model_mapper.py"
 MAPPER_ORIGINAL_PATH = f"{CHIPSIM_ROOT}/src/mapping/model_mapper_original.py"
 PARTITIONER_PATH = f"{CHIPSIM_ROOT}/src/mapping/layer_partitioner.py"
 CONFIG_PATH = f"{CHIPSIM_ROOT}/configs/experiments/config_1.yaml"
 
-# Back up the original mapper on first run (only once)
-# Delete model_mapper_original.py to force a fresh backup
+MAX_VALIDATION_RETRIES = 3
+MAX_RUNTIME_RETRIES = 3
+
+# Back up the original mapper on first run (only once).
+# Delete model_mapper_original.py to force a fresh backup.
 if not os.path.exists(MAPPER_ORIGINAL_PATH):
     shutil.copy(MAPPER_PATH, MAPPER_ORIGINAL_PATH)
     print(f"Backed up original mapper to {MAPPER_ORIGINAL_PATH}")
@@ -42,7 +49,6 @@ else:
     if '        else:\n            try:' not in backup_content:
         print(f"WARNING: {MAPPER_ORIGINAL_PATH} looks corrupted (missing else/try pattern).")
         print(f"  Creating fresh backup from {MAPPER_PATH}...")
-        # Only overwrite if the current file has the pattern
         with open(MAPPER_PATH, 'r') as f:
             current = f.read()
         if '        else:\n            try:' in current:
@@ -56,34 +62,26 @@ else:
 # 1. DEFINE STATE
 # ---------------------------------------------------------------
 class ChipSimState(TypedDict):
-    #objects for validation
+    # validation pipeline
     user_request: str
     config_analysis: str
     mapping_source_code: str
-    mapping_proposal: str        # raw LLM output (just the function code)
-    function_name: str            # extracted function name
+    mapping_proposal: str          # cleaned LLM output (function code)
+    function_name: str
     validation_errors: list
     is_valid: bool
-    injected_file_path: str       # path to the modified model_mapper.py
-    retry_count: int
+    injected_file_path: str
+    retry_count: int               # validation retries within a single proposal cycle
 
-    #objects for runtime 
-    iteration: int
-    max_iterations: int
-
+    # runtime pipeline
     target_file_path: str
     run_command: list[str]
     run_cwd: Optional[str]
-
-    current_working_code: str
-    proposed_code: str
-    failed_code: Optional[str]
-
     run_succeeded: bool
     runtime_error: Optional[str]
+    last_runtime_error: Optional[str]   # preserved across validation retries for LLM context
     latest_output: Optional[str]
-
-    should_continue: bool
+    runtime_retry_count: int            # total runtime retries across the whole run
     history: list[dict[str, Any]]
 
 
@@ -102,9 +100,9 @@ llm = ChatGroq(
 MAPPER_CONTRACT = """
 STRICT REQUIREMENTS — your code MUST follow these rules exactly:
 
-1. METHOD SIGNATURE: The method must be named with a leading underscore 
+1. METHOD SIGNATURE: The method must be named with a leading underscore
    (e.g., def _my_optimized_mapper) and accept exactly these arguments:
-   (self, model_layer_info, system, preference, 
+   (self, model_layer_info, system, preference,
     current_available_crossbars, layer_mappings=None, shortest_paths=None)
 
 2. RETURN TYPE: Must return a tuple of exactly 4 values:
@@ -116,7 +114,7 @@ STRICT REQUIREMENTS — your code MUST follow these rules exactly:
    - failure_reason: str or None
 
 3. DO NOT MODIFY:
-   - The argument list  
+   - The argument list
    - The return type structure
    - The _calculate_layer_requirements method (treat it as a black box you call)
    - Any System or Chiplet class interfaces
@@ -128,7 +126,7 @@ STRICT REQUIREMENTS — your code MUST follow these rules exactly:
    - Adding look-ahead or global optimization within the method
 
 5. AVAILABLE DATA you can use:
-   - model_layer_info['name'], ['crossbars_required'], ['layer_type'], 
+   - model_layer_info['name'], ['crossbars_required'], ['layer_type'],
      ['filter_size'], ['out_channels'], ['in_features'], ['out_features']
    - system.chiplets (list of Chiplet objects)
    - system.chiplet_network (networkx graph)
@@ -152,7 +150,7 @@ STRICT REQUIREMENTS — your code MUST follow these rules exactly:
 
 
 # ---------------------------------------------------------------
-# 4. DEFINE NODES
+# 4. NODES
 # ---------------------------------------------------------------
 def analyze_config(state: ChipSimState) -> dict:
     """Agent 1: Analyze the config, mapper code, and partitioner code."""
@@ -188,17 +186,38 @@ def analyze_config(state: ChipSimState) -> dict:
 
 
 def propose_mapping(state: ChipSimState) -> dict:
-    """Agent 2: Generate drop-in replacement mapper function."""
+    """Agent 2: Generate a drop-in replacement mapper function.
 
-    # Include validation errors from previous attempts if any
-    error_context = ""
-    if state.get("validation_errors"):
-        error_context = (
-            "\n\nYour PREVIOUS attempt failed validation with these errors:\n"
-            + "\n".join(f"  - {e}" for e in state["validation_errors"])
-            + "\n\nFix ALL of these issues. Pay careful attention to the method "
-            "signature, return type, and naming requirements."
+    Uses error context from either the most recent validation failure or the
+    most recent runtime failure. `last_runtime_error` is preserved across
+    validation retries so the LLM doesn't forget the original runtime issue
+    while it's also fixing validation problems.
+    """
+    runtime_error = state.get("runtime_error")
+    last_runtime_error = state.get("last_runtime_error")
+    validation_errors = state.get("validation_errors") or []
+
+    error_parts = []
+    if runtime_error:
+        error_parts.append(
+            "Your PREVIOUS attempt FAILED AT RUNTIME with this error:\n"
+            f"  {runtime_error}\n\n"
+            "Fix the logic so it runs without crashing. Pay attention to "
+            "attribute access, None checks, and division-by-zero cases."
         )
+    elif validation_errors:
+        msg = "Your PREVIOUS attempt failed validation with these errors:\n"
+        msg += "\n".join(f"  - {e}" for e in validation_errors)
+        msg += "\n\nFix ALL of these issues."
+        if last_runtime_error:
+            msg += (
+                "\n\nFor context, the proposal BEFORE that one failed at runtime with:\n"
+                f"  {last_runtime_error}\n"
+                "Make sure your fix still addresses that runtime issue."
+            )
+        error_parts.append(msg)
+
+    error_context = "\n\n" + "\n\n".join(error_parts) if error_parts else ""
 
     messages = [
         SystemMessage(content=(
@@ -217,7 +236,16 @@ def propose_mapping(state: ChipSimState) -> dict:
         ))
     ]
     response = llm.invoke(messages)
-    return {"mapping_proposal": response.content}
+
+    # Promote the active runtime_error to last_runtime_error so it survives
+    # across upcoming validation retries, then clear runtime_error so it
+    # doesn't get re-applied as the primary error context next round.
+    return {
+        "mapping_proposal": response.content,
+        "runtime_error": None,
+        "last_runtime_error": runtime_error or last_runtime_error,
+        "validation_errors": [],
+    }
 
 
 def validate_proposal(state: ChipSimState) -> dict:
@@ -227,10 +255,8 @@ def validate_proposal(state: ChipSimState) -> dict:
 
     # --- Clean up LLM output ---
     code = raw_code.strip()
-    # Strip markdown fences
     code = re.sub(r'^```(?:python)?\s*\n?', '', code)
     code = re.sub(r'\n?```\s*$', '', code)
-    # Strip any leading prose before the def
     lines = code.split('\n')
     def_start = None
     for i, line in enumerate(lines):
@@ -254,89 +280,15 @@ def validate_proposal(state: ChipSimState) -> dict:
             "retry_count": state.get("retry_count", 0) + 1,
         }
 
-#-------------------------------------------------------------------------
+    # --- 2. Find the top-level function definition ---
+    func_def = None
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            func_def = node
+            break
 
-# Add new node here
-def runtime_test(state: ChipSimState) -> dict:
-    history = state.get("history", [])
-    iteration = state.get("iteration", 0) + 1
-
-    try:
-        result = subprocess.run(
-            state["run_command"],
-            cwd=state.get("run_cwd"),
-            capture_output=True,
-            text=True,
-            timeout=20
-        )
-    except subprocess.TimeoutExpired:
-        msg = "Execution timed out after 20 seconds."
-        history.append({
-            "iteration": iteration,
-            "outcome": "RUNTIME_ERROR",
-            "error": msg[:1000],
-        })
-        return {
-            "iteration": iteration,
-            "history": history,
-            "run_succeeded": False,
-            "runtime_error": msg,
-            "latest_output": None,
-        }
-    except Exception as e:
-        msg = f"Execution failed unexpectedly:\n{e}"
-        history.append({
-            "iteration": iteration,
-            "outcome": "RUNTIME_ERROR",
-            "error": msg[:1000],
-        })
-        return {
-            "iteration": iteration,
-            "history": history,
-            "run_succeeded": False,
-            "runtime_error": msg,
-            "latest_output": None,
-        }
-
-    if result.returncode != 0:
-        error_text = (result.stderr or result.stdout or "")[-3000:]
-        history.append({
-            "iteration": iteration,
-            "outcome": "RUNTIME_ERROR",
-            "error": error_text[:1000],
-        })
-        return {
-            "iteration": iteration,
-            "history": history,
-            "run_succeeded": False,
-            "runtime_error": error_text,
-            "latest_output": result.stdout,
-        }
-
-    history.append({
-        "iteration": iteration,
-        "outcome": "SUCCESS",
-        "output": result.stdout,
-    })
-    return {
-        "iteration": iteration,
-        "history": history,
-        "run_succeeded": True,
-        "runtime_error": None,
-        "latest_output": result.stdout,
-    }
-
-#-------------------------------------------------------------------------
-
-    # --- 2. Check there's exactly one function definition ---
-    func_nodes = [n for n in ast.iter_child_nodes(tree)
-                  if isinstance(n, ast.FunctionDef)]
-    if len(func_nodes) == 0:
-        errors.append("No function definition found. Output must start with 'def _...'")
-    elif len(func_nodes) > 1:
-        errors.append(f"Found {len(func_nodes)} function definitions, expected exactly 1")
-
-    if not func_nodes:
+    if func_def is None:
+        errors.append("No top-level function definition found.")
         return {
             "mapping_proposal": code,
             "validation_errors": errors,
@@ -345,120 +297,163 @@ def runtime_test(state: ChipSimState) -> dict:
             "retry_count": state.get("retry_count", 0) + 1,
         }
 
-    func = func_nodes[0]
-    func_name = func.name
-
-    # --- 3. Check function name starts with underscore ---
-    if not func_name.startswith('_'):
+    # --- 3. Method name must start with underscore ---
+    raw_name = func_def.name
+    if not raw_name.startswith("_"):
         errors.append(
-            f"Function name '{func_name}' must start with underscore "
-            f"(e.g., '_{func_name}')"
+            f"Function name '{raw_name}' must start with an underscore "
+            f"(e.g., '_my_optimized_mapper')."
+        )
+    public_name = raw_name.lstrip("_")
+    if not public_name:
+        errors.append("Function name cannot be just underscores.")
+
+    # --- 4. Argument list must match the contract exactly ---
+    expected_args = [
+        "self",
+        "model_layer_info",
+        "system",
+        "preference",
+        "current_available_crossbars",
+        "layer_mappings",
+        "shortest_paths",
+    ]
+    actual_args = [a.arg for a in func_def.args.args]
+    if actual_args != expected_args:
+        errors.append(
+            f"Argument list mismatch.\n"
+            f"  Expected: {expected_args}\n"
+            f"  Got:      {actual_args}"
         )
 
-    # --- 4. Check 'self' is the first argument ---
-    args = func.args
-    arg_names = [a.arg for a in args.args]
-    if not arg_names or arg_names[0] != 'self':
-        errors.append(f"First argument must be 'self', got: {arg_names}")
+    # Defaults for layer_mappings and shortest_paths must be None
+    defaults = func_def.args.defaults
+    if len(defaults) < 2:
+        errors.append(
+            "layer_mappings and shortest_paths must have default value None."
+        )
+    else:
+        last_two = defaults[-2:]
+        for i, d in enumerate(last_two):
+            arg_name = expected_args[-2 + i]
+            if not (isinstance(d, ast.Constant) and d.value is None):
+                errors.append(f"Default value for '{arg_name}' must be None.")
 
-    # --- 5. Check required positional arguments ---
-    required_args = [
-        'self', 'model_layer_info', 'system', 'preference',
-        'current_available_crossbars'
-    ]
-    for i, req in enumerate(required_args):
-        if i >= len(arg_names):
-            errors.append(f"Missing required argument '{req}' at position {i}")
-        elif arg_names[i] != req:
+    # --- 5. At least one return must be a 4-tuple ---
+    return_nodes = [n for n in ast.walk(func_def) if isinstance(n, ast.Return)]
+    if not return_nodes:
+        errors.append("Function has no return statement.")
+    else:
+        has_valid_tuple_return = False
+        for rn in return_nodes:
+            if rn.value is None:
+                continue
+            if isinstance(rn.value, ast.Tuple) and len(rn.value.elts) == 4:
+                has_valid_tuple_return = True
+                break
+        if not has_valid_tuple_return:
             errors.append(
-                f"Argument at position {i} should be '{req}', got '{arg_names[i]}'"
+                "At least one return statement must return a 4-tuple: "
+                "(remaining_capacity, action, mapping_failed, failure_reason)."
             )
 
-    # --- 6. Check optional keyword arguments ---
-    defaults_names = []
-    # keyword-only args (after *)
-    for kw in args.kwonlyargs:
-        defaults_names.append(kw.arg)
-    # or defaults on positional args
-    num_defaults = len(args.defaults)
-    if num_defaults > 0:
-        defaulted_args = arg_names[-num_defaults:]
-        defaults_names.extend(defaulted_args)
+    # --- 6. No imports inside the function ---
+    for n in ast.walk(func_def):
+        if isinstance(n, (ast.Import, ast.ImportFrom)):
+            errors.append(
+                "Import statements are not allowed inside the function. "
+                "numpy as np, math, and networkx as nx are already imported."
+            )
+            break
 
-    expected_optional = {'layer_mappings', 'shortest_paths'}
-    for opt in expected_optional:
-        if opt not in arg_names and opt not in defaults_names:
-            errors.append(f"Missing optional argument '{opt}' (should default to None)")
+    # --- 7. Final decision ---
+    if errors:
+        return {
+            "mapping_proposal": code,
+            "validation_errors": errors,
+            "is_valid": False,
+            "function_name": "",
+            "retry_count": state.get("retry_count", 0) + 1,
+        }
 
-    # --- 7. Check return statements ---
-    returns = [n for n in ast.walk(func) if isinstance(n, ast.Return)]
-    if not returns:
-        errors.append("No return statement found in function")
-    else:
-        for ret in returns:
-            if ret.value is None:
-                errors.append("Found bare 'return' with no value — must return 4-tuple")
-            elif isinstance(ret.value, ast.Tuple):
-                if len(ret.value.elts) != 4:
-                    errors.append(
-                        f"Return tuple has {len(ret.value.elts)} elements, "
-                        f"expected exactly 4: (remaining_capacity, action, "
-                        f"mapping_failed, failure_reason)"
-                    )
-
-    # --- 8. Check no import statements ---
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
-            module = ""
-            if isinstance(node, ast.ImportFrom):
-                module = node.module or ""
-            elif isinstance(node, ast.Import):
-                module = ", ".join(a.name for a in node.names)
-            errors.append(f"Contains import statement ({module}) — not allowed")
-
-    # --- 9. Check it references key variables/patterns ---
-    code_text = code
-    critical_patterns = {
-        'remaining_capacity': 'Must track remaining chiplet capacity',
-        'action': 'Must build an action list of allocation percentages',
-        'mapping_failed': 'Must set mapping_failed flag',
-    }
-    for pattern, description in critical_patterns.items():
-        if pattern not in code_text:
-            errors.append(f"Missing '{pattern}' — {description}")
-
-    # --- 10. Check it calls _calculate_layer_requirements ---
-    if '_calculate_layer_requirements' not in code_text:
-        errors.append(
-            "Does not call self._calculate_layer_requirements() — "
-            "this is needed to compute chiplet-specific resource requirements"
-        )
-
-    # Build result
-    # Strip leading underscore for the "public" function name used in wiring
-    public_name = func_name.lstrip('_') if func_name.startswith('_') else func_name
-
-    is_valid = len(errors) == 0
     return {
         "mapping_proposal": code,
-        "validation_errors": errors,
-        "is_valid": is_valid,
+        "validation_errors": [],
+        "is_valid": True,
         "function_name": public_name,
-        "retry_count": state.get("retry_count", 0) + (0 if is_valid else 1),
+        "retry_count": state.get("retry_count", 0),
+    }
+
+
+def runtime_handler(state: ChipSimState) -> dict:
+    """Run the simulator. On failure, preserve the runtime error for the
+    optimizer and reset the validation retry budget so the next proposal
+    gets a fresh validation cycle.
+    """
+    history = state.get("history", [])
+    runtime_retry_count = state.get("runtime_retry_count", 0)
+
+    def fail(msg: str, stdout: Optional[str] = None) -> dict:
+        history.append({
+            "runtime_attempt": runtime_retry_count + 1,
+            "outcome": "RUNTIME_ERROR",
+            "error": msg[:1000],
+        })
+        return {
+            "history": history,
+            "run_succeeded": False,
+            "runtime_error": msg,
+            "latest_output": stdout,
+            "runtime_retry_count": runtime_retry_count + 1,
+            "retry_count": 0,                # fresh validation budget for next proposal
+        }
+
+    try:
+        result = subprocess.run(
+            state["run_command"],
+            cwd=state.get("run_cwd"),
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired:
+        return fail("Execution timed out after 20 seconds.")
+    except Exception as e:
+        return fail(f"Execution failed unexpectedly:\n{e}")
+
+    if result.returncode != 0:
+        error_text = (result.stderr or result.stdout or "")[-3000:]
+        return fail(error_text, stdout=result.stdout)
+
+    # Success
+    history.append({
+        "runtime_attempt": runtime_retry_count + 1,
+        "outcome": "SUCCESS",
+        "output": result.stdout[-3000:],
+    })
+    return {
+        "history": history,
+        "run_succeeded": True,
+        "runtime_error": None,
+        "latest_output": result.stdout,
+        "runtime_retry_count": runtime_retry_count,
     }
 
 
 def inject_into_mapper(state: ChipSimState) -> dict:
-    """Inject the validated function into model_mapper.py with proper wiring."""
+    """Inject the validated function into model_mapper.py with proper wiring.
+    Always starts from the pristine MAPPER_ORIGINAL_PATH so each retry
+    cleanly replaces the previous proposal rather than stacking.
+    """
     function_code = state["mapping_proposal"]
     public_name = state["function_name"]
     method_name = f"_{public_name}"
 
-    # Always start from the original pristine file
-    with open(MAPPER_ORIGINAL_PATH, 'r') as f:
-        original = f.read()
+    if not public_name:
+        raise ValueError("Cannot inject mapper: function_name is empty.")
 
-    modified = original
+    with open(MAPPER_ORIGINAL_PATH, 'r') as f:
+        modified = f.read()
 
     # --- 1. Update default mapping_function in __init__ ---
     old_default = re.search(r'mapping_function\s*=\s*["\']([^"\']+)["\']', modified)
@@ -472,46 +467,34 @@ def inject_into_mapper(state: ChipSimState) -> dict:
     print(f"  __init__ default: '{old_default.group(1) if old_default else '?'}' → '{new_default.group(1) if new_default else '?'}'")
 
     # --- 2. Add routing in _get_mapper_function ---
-    # Strategy: find _get_mapper_function line by line, locate the "else:" 
-    # that belongs to the if/elif chain, and insert our elif before it.
-    # This works regardless of what the backup file looks like.
     target_elif_statement = f'elif self.mapping_function == "{public_name}":'
     if target_elif_statement not in modified:
-            lines = modified.split('\n')
-            new_lines = []
-            injected = False
-            anchor_string = "return self._nearest_neighbor_mapper_v3"
+        lines = modified.split('\n')
+        new_lines = []
+        injected = False
+        anchor_string = "return self._nearest_neighbor_mapper_v3"
 
-            for line in lines:
-                # Always add the current line first
-                new_lines.append(line)
-                
-                # If we hit our anchor, inject the new routing right after it
-                if anchor_string in line and not injected:
-                    # Calculate indentation dynamically based on the anchor line
-                    return_indent_level = len(line) - len(line.lstrip())
-                    elif_indent_level = max(0, return_indent_level - 4)
-                    
-                    indent_elif = ' ' * elif_indent_level
-                    indent_return = ' ' * return_indent_level
-                    
-                    # Inject the new elif block
-                    new_lines.append(f'{indent_elif}elif self.mapping_function == "{public_name}":')
-                    new_lines.append(f'{indent_return}return self.{method_name}')
-                    
-                    injected = True
+        for line in lines:
+            new_lines.append(line)
+            if anchor_string in line and not injected:
+                return_indent_level = len(line) - len(line.lstrip())
+                elif_indent_level = max(0, return_indent_level - 4)
+                indent_elif = ' ' * elif_indent_level
+                indent_return = ' ' * return_indent_level
+                new_lines.append(f'{indent_elif}elif self.mapping_function == "{public_name}":')
+                new_lines.append(f'{indent_return}return self.{method_name}')
+                injected = True
 
-            if injected:
-                modified = '\n'.join(new_lines)
-                print(f"  _get_mapper_function: elif for '{public_name}' injected successfully")
-            else:
-                print(f"  _get_mapper_function: INJECTION FAILED")
-                print(f"    Could not find the anchor string: '{anchor_string}'")
+        if injected:
+            modified = '\n'.join(new_lines)
+            print(f"  _get_mapper_function: elif for '{public_name}' injected successfully")
+        else:
+            print(f"  _get_mapper_function: INJECTION FAILED")
+            print(f"    Could not find the anchor string: '{anchor_string}'")
     else:
         print(f"  _get_mapper_function: elif for '{public_name}' already present")
 
     # --- 3. Indent and append the new method to the class ---
-    # Determine the base indentation from the LLM output's def line
     lines = function_code.split('\n')
     base_indent = 0
     for line in lines:
@@ -524,14 +507,11 @@ def inject_into_mapper(state: ChipSimState) -> dict:
         if not line.strip():
             indented_lines.append('')
         else:
-            # Strip the LLM's base indentation, add 4-space class method indent
             current_indent = len(line) - len(line.lstrip())
             relative_indent = max(0, current_indent - base_indent)
             indented_lines.append('    ' + ' ' * relative_indent + line.lstrip())
 
     method_block = '\n'.join(indented_lines)
-
-    # Append after the last method in the class
     modified = modified.rstrip() + '\n\n' + method_block + '\n'
 
     # --- 4. Write the modified file ---
@@ -546,22 +526,22 @@ def inject_into_mapper(state: ChipSimState) -> dict:
 
 
 # ---------------------------------------------------------------
-# 5. ROUTING FUNCTIONS
+# 5. ROUTING
 # ---------------------------------------------------------------
-MAX_VALIDATION_RETRIES = 3
-
 def route_after_validation(state: ChipSimState) -> str:
-    """Decide whether to inject or retry after validation."""
+    """Decide whether to inject, retry validation, or give up."""
     if state.get("is_valid", False):
         return "inject"
     if state.get("retry_count", 0) >= MAX_VALIDATION_RETRIES:
         return "give_up"
     return "retry"
 
+
 def runtime_decision(state: ChipSimState) -> str:
+    """Decide whether to end the run, retry the optimizer, or give up."""
     if state.get("run_succeeded", False):
         return "done"
-    if state.get("iteration", 0) >= state.get("max_iterations", 0):
+    if state.get("runtime_retry_count", 0) >= MAX_RUNTIME_RETRIES:
         return "done"
     return "retry"
 
@@ -571,70 +551,42 @@ def runtime_decision(state: ChipSimState) -> str:
 # ---------------------------------------------------------------
 graph_builder = StateGraph(ChipSimState)
 
-# Add nodes
 graph_builder.add_node("analyzer", analyze_config)
 graph_builder.add_node("optimizer", propose_mapping)
 graph_builder.add_node("validator", validate_proposal)
 graph_builder.add_node("injector", inject_into_mapper)
+graph_builder.add_node("runtime_handler", runtime_handler)
 
-# ---------------------------------------------------------------
-# Code for runtime error handling
-
-graph_builder.add_node("runtime_test", runtime_test)
-
-# Finished code for runtime error handling
-#----------------------------------------------------------------
-
-# Edges
 graph_builder.add_edge(START, "analyzer")
 graph_builder.add_edge("analyzer", "optimizer")
 graph_builder.add_edge("optimizer", "validator")
 
-#----------------------------------------------------------------
-# Code for adding edges for runtime error handling
-
-graph_builder.add_edge("injector", "runtime_test")
-graph_builder.add_edge("runtime_test","optimizer")
-
-graph_builder.add_conditional_edges(
-    "runtime_test",
-    runtime_decision,
-    {
-        "retry": "optimizer",
-        "done": END,
-    }
-)
-
-#----------------------------------------------------------------
-
-# Conditional: validator decides next step
 graph_builder.add_conditional_edges(
     "validator",
     route_after_validation,
     {
-        "inject": "injector",       # valid → inject into model_mapper.py
-        "retry": "optimizer",       # invalid → retry with error feedback
-        "give_up": END,             # too many retries → stop
-    }
+        "inject": "injector",
+        "retry": "optimizer",
+        "give_up": END,
+    },
 )
+
+graph_builder.add_edge("injector", "runtime_handler")
 
 graph_builder.add_conditional_edges(
-    "runtime_handler_rerun",
+    "runtime_handler",
     runtime_decision,
     {
-        "retry": "runtime_handler_propose",
+        "retry": "optimizer",
         "done": END,
-    }
+    },
 )
 
-graph_builder.add_edge("injector", END)
-
-# Compile
 graph = graph_builder.compile()
 
 
 # ---------------------------------------------------------------
-# 7. RUN IT
+# 7. RUN
 # ---------------------------------------------------------------
 if __name__ == "__main__":
     with open(CONFIG_PATH) as f:
@@ -646,6 +598,8 @@ if __name__ == "__main__":
     print(f"Config: {CONFIG_PATH}")
     print(f"Mapper: {MAPPER_PATH}")
     print(f"Original backup: {MAPPER_ORIGINAL_PATH}")
+    print(f"Validation retries per proposal: {MAX_VALIDATION_RETRIES}")
+    print(f"Runtime retries total:           {MAX_RUNTIME_RETRIES}")
     print()
 
     result = graph.invoke({
@@ -666,11 +620,15 @@ if __name__ == "__main__":
         "injected_file_path": "",
         "retry_count": 0,
 
-        "iteration": 0,
-        "max_iterations": 3,
-        "target_file_path": "last_generated_mapper.py",
-        "run_command": ["python3", "last_generated_mapper.py"],
-        "run_cwd": None,
+        "target_file_path": MAPPER_PATH,
+        "run_command": ["python3", "simulate.py", "--mode", "simulate", "--config", "config_1"],
+        "run_cwd": CHIPSIM_ROOT,
+
+        "run_succeeded": False,
+        "runtime_error": None,
+        "last_runtime_error": None,
+        "latest_output": None,
+        "runtime_retry_count": 0,
         "history": [],
     })
 
@@ -683,19 +641,48 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("VALIDATION RESULT:")
     print("=" * 60)
-    if result["is_valid"]:
+    if result.get("is_valid"):
         print(f"PASSED — function '{result['function_name']}' is valid")
         print(f"Injected into: {result.get('injected_file_path', 'N/A')}")
     else:
-        print(f"FAILED after {result['retry_count']} attempts")
+        print(f"FAILED after {result.get('retry_count', 0)} validation attempts")
         print("Errors:")
         for e in result.get("validation_errors", []):
             print(f"  - {e}")
 
     print("\n" + "=" * 60)
+    print("RUNTIME RESULT:")
+    print("=" * 60)
+    if result.get("run_succeeded"):
+        print(f"SUCCESS after {result.get('runtime_retry_count', 0)} retries")
+    else:
+        print(f"FAILED after {result.get('runtime_retry_count', 0)} runtime attempts")
+        if result.get("runtime_error"):
+            print(f"Last error:\n{result['runtime_error'][:500]}")
+
+    # print("\n" + "=" * 60)
+    # print("HISTORY:")
+    # print("=" * 60)
+    # for entry in result.get("history", []):
+    #     outcome = entry.get("outcome", "?")
+    #     attempt = entry.get("runtime_attempt", "?")
+    #     print(f"  Attempt {attempt}: {outcome}")
+    print("\n" + "=" * 60)
+    print("HISTORY:")
+    print("=" * 60)
+    for entry in result.get("history", []):
+        outcome = entry.get("outcome", "?")
+        attempt = entry.get("runtime_attempt", "?")
+        print(f"\n  Attempt {attempt}: {outcome}")
+        if "error" in entry:
+            print(f"  Error:\n    {entry['error'][:800]}")
+        if "output" in entry:
+            print(f"  Output (last 500 chars):\n    {entry['output'][-500:]}")
+
+    print("\n" + "=" * 60)
     print("GENERATED CODE:")
     print("=" * 60)
-    print(result["mapping_proposal"])
+    print(result.get("mapping_proposal", ""))
 
     # --- Save the generated code separately for reference ---
     output_dir = os.path.dirname(os.path.abspath(__file__))
@@ -703,6 +690,8 @@ if __name__ == "__main__":
     with open(code_output, 'w') as f:
         f.write(f"# Function name: {result.get('function_name', 'unknown')}\n")
         f.write(f"# Valid: {result.get('is_valid', False)}\n")
-        f.write(f"# Retry count: {result.get('retry_count', 0)}\n\n")
+        f.write(f"# Validation retries: {result.get('retry_count', 0)}\n")
+        f.write(f"# Runtime retries:    {result.get('runtime_retry_count', 0)}\n")
+        f.write(f"# Run succeeded:      {result.get('run_succeeded', False)}\n\n")
         f.write(result.get("mapping_proposal", "# No code generated"))
     print(f"\nGenerated code saved to: {code_output}")
