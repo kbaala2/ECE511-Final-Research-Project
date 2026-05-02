@@ -242,6 +242,7 @@ class GlobalManager:
             system=self.system
             #mapping_function=self.mapping_function
         )
+        self.mapping_function = self.model_mapper.mapping_function
         # Optional seeding map: {model_idx: chiplet_id}
         self.seed_start_chiplet_ids = {}
         # Optional allowed chiplets per model: {model_idx: Iterable[int]}
