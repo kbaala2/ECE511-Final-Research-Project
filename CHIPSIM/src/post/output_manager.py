@@ -50,6 +50,9 @@ class OutputManager:
         """
         Create a unique directory for storing raw simulation results under _results/raw_results/.
         
+        If the environment variable CHIPSIM_RESULTS_DIR_NAME is set, it will be used as the 
+        directory name instead of the default timestamp + parameters format.
+        
         Returns:
             str: Path to the created results directory (e.g., _results/raw_results/YYYY.MM.DD_..._params)
         """
@@ -61,16 +64,22 @@ class OutputManager:
         raw_results_base_dir = os.path.join(base_results_root, "raw_results")
         os.makedirs(raw_results_base_dir, exist_ok=True)
         
-        # Create a unique directory name based on timestamp and parameters
-        timestamp = time.strftime("%Y.%m.%d_%H.%M.%S")
+        # Check for environment variable override for directory name
+        env_dir_name = os.environ.get("CHIPSIM_RESULTS_DIR_NAME", None)
         
-        adj_matrix_base_name = os.path.splitext(os.path.basename(self.adj_matrix_file))[0]
-        chiplet_mapping_base_name = os.path.splitext(os.path.basename(self.chiplet_mapping_file))[0]
+        if env_dir_name:
+            dir_name = env_dir_name
+        else:
+            # Create a unique directory name based on timestamp and parameters
+            timestamp = time.strftime("%Y.%m.%d_%H.%M.%S")
+            
+            adj_matrix_base_name = os.path.splitext(os.path.basename(self.adj_matrix_file))[0]
+            chiplet_mapping_base_name = os.path.splitext(os.path.basename(self.chiplet_mapping_file))[0]
 
-        # Include relevant simulation parameters in the directory name
-        dir_name = (f"{timestamp}_{self.workload_base_name}_{self.communication_simulator}_"
-                    f"{self.communication_method}_{adj_matrix_base_name}_"
-                    f"{chiplet_mapping_base_name}_{self.num_chiplets}chiplets")
+            # Include relevant simulation parameters in the directory name
+            dir_name = (f"{timestamp}_{self.workload_base_name}_{self.communication_simulator}_"
+                        f"{self.communication_method}_{adj_matrix_base_name}_"
+                        f"{chiplet_mapping_base_name}_{self.num_chiplets}chiplets")
         
         # Create the unique directory path under raw_results_base_dir
         self.results_dir = os.path.join(raw_results_base_dir, dir_name)

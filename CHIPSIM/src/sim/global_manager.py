@@ -178,7 +178,7 @@ class GlobalManager:
             )
         
         # Simulation settings
-        self.mapping_function = "nearest_neighbor_v3"
+        #self.mapping_function = "nearest_neighbor_v3"
         self.warmup_period_us = warmup_period_us
         self.time_step_us = 1  # In microseconds
         self.clear_cache = clear_cache
@@ -239,8 +239,8 @@ class GlobalManager:
         
         # Initialize the ModelMapper
         self.model_mapper = ModelMapper(
-            system=self.system,
-            mapping_function=self.mapping_function
+            system=self.system
+            #mapping_function=self.mapping_function
         )
         # Optional seeding map: {model_idx: chiplet_id}
         self.seed_start_chiplet_ids = {}
