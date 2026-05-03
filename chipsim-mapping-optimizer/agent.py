@@ -73,6 +73,8 @@ args = parse_args()
 # CONFIGURATION
 # ---------------------------------------------------------------
 CHIPSIM_ROOT = "/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM"
+PROJECT_ROOT = "/home/rbaala2/ECE511-Final-Research-Project"
+BASELINE_RESULTS_ROOT = f"{PROJECT_ROOT}/performance_results/baseline/heterogenous"
 MAPPER_PATH = f"{CHIPSIM_ROOT}/src/mapping/model_mapper.py"
 MAPPER_ORIGINAL_PATH = f"{CHIPSIM_ROOT}/src/mapping/model_mapper_original.py"
 PARTITIONER_PATH = f"{CHIPSIM_ROOT}/src/mapping/layer_partitioner.py"
@@ -661,53 +663,49 @@ def runtime_handler(state: ChipSimState) -> dict:
 
 # ======================== BASELINE ========================
 def run_baseline(state: ChipSimState) -> dict:
-    """Run CHIPSIM with the original nearest-neighbor mapper."""
+    """Load pre-computed baseline metrics from performance_results directory.
+    
+    Reads from:
+      <PROJECT_ROOT>/performance_results/baseline/heterogenous/<CONFIG_NAME>/
+        formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    """
     config_name = state["config_name"]
-    results_label = f"{config_name}_baseline"
 
     print(f"\n{'='*60}")
-    print(f"RUNNING BASELINE (nearest_neighbor_v3)")
+    print(f"LOADING BASELINE (pre-computed nearest_neighbor_v3)")
     print(f"{'='*60}")
 
-    # Restore original mapper
+    # Restore original mapper so subsequent iterations start from clean state
     shutil.copy(MAPPER_ORIGINAL_PATH, MAPPER_PATH)
-    subprocess.run(
-        ["find", CHIPSIM_ROOT, "-type", "d", "-name", "__pycache__",
-         "-exec", "rm", "-rf", "{}", "+"],
-        capture_output=True
+
+    baseline_metrics_path = os.path.join(
+        BASELINE_RESULTS_ROOT, config_name,
+        "formatted_comparison_metrics", "Approach_Comparison_Metrics.txt"
     )
 
-    sim_env = os.environ.copy()
-    sim_env["CHIPSIM_RESULTS_DIR_NAME"] = results_label
-    for subdir in ["raw_results", "formatted_results"]:
-        old = os.path.join(CHIPSIM_ROOT, "_results", subdir, results_label)
-        if os.path.exists(old):
-            shutil.rmtree(old)
+    if not os.path.exists(baseline_metrics_path):
+        print(f"  ERROR: Pre-computed baseline not found at:")
+        print(f"    {baseline_metrics_path}")
+        # List available baselines
+        if os.path.exists(BASELINE_RESULTS_ROOT):
+            available = [d for d in os.listdir(BASELINE_RESULTS_ROOT)
+                         if os.path.isdir(os.path.join(BASELINE_RESULTS_ROOT, d))]
+            print(f"  Available baselines: {', '.join(sorted(available)) if available else 'none'}")
+        else:
+            print(f"  Baseline directory does not exist: {BASELINE_RESULTS_ROOT}")
+        return {"run_succeeded": False, "runtime_error": "Baseline results not found", "baseline_metrics": {}}
 
-    print(f"  Running CHIPSIM with config '{config_name}' (baseline)...")
-    start_time = time.time()
-    try:
-        result = subprocess.run(
-            ["python3", "simulate.py", "--mode", "simulate", "--config", config_name],
-            cwd=CHIPSIM_ROOT, capture_output=True, text=True, timeout=900, env=sim_env,
-        )
-    except (subprocess.TimeoutExpired, Exception) as e:
-        print(f"  BASELINE FAILED: {e}")
-        return {"run_succeeded": False, "runtime_error": str(e), "baseline_metrics": {}}
+    print(f"  Reading baseline from: {baseline_metrics_path}")
+    baseline_metrics = _parse_metrics_file(baseline_metrics_path)
 
-    elapsed = time.time() - start_time
-    print(f"  Baseline finished in {elapsed:.1f}s (exit code: {result.returncode})")
+    if not baseline_metrics:
+        print(f"  ERROR: Could not parse any metrics from baseline file")
+        return {"run_succeeded": False, "runtime_error": "Failed to parse baseline metrics", "baseline_metrics": {}}
 
-    if result.returncode != 0:
-        print(f"  BASELINE FAILED — cannot proceed")
-        return {"run_succeeded": False, "runtime_error": result.stderr[-1000:], "baseline_metrics": {}}
-
-    baseline_metrics = parse_metrics_from_file(results_label)
-    if baseline_metrics:
-        print(f"  Baseline established:")
-        print(f"    Total Latency:   {baseline_metrics.get('total_latency', 'N/A')} µs")
-        print(f"    Compute Latency: {baseline_metrics.get('compute_latency', 'N/A')} µs")
-        print(f"    Comm Latency:    {baseline_metrics.get('comm_latency', 'N/A')} µs")
+    print(f"  Baseline loaded:")
+    print(f"    Total Latency:   {baseline_metrics.get('total_latency', 'N/A')} µs")
+    print(f"    Compute Latency: {baseline_metrics.get('compute_latency', 'N/A')} µs")
+    print(f"    Comm Latency:    {baseline_metrics.get('comm_latency', 'N/A')} µs")
 
     return {
         "run_succeeded": True,
@@ -717,30 +715,16 @@ def run_baseline(state: ChipSimState) -> dict:
 
 
 # ======================== METRICS PARSER ========================
-def parse_metrics_from_file(results_label: str) -> dict:
-    """Parse metrics from CHIPSIM's Approach_Comparison_Metrics.txt."""
-    metrics_path = os.path.join(
-        CHIPSIM_ROOT, "_results", "formatted_results", results_label,
-        "formatted_comparison_metrics", "Approach_Comparison_Metrics.txt"
-    )
+def _parse_metrics_file(filepath: str) -> dict:
+    """Parse an Approach_Comparison_Metrics.txt file and return structured metrics.
+    
+    This is the core parser shared by both baseline loading and iteration evaluation.
+    """
+    if not os.path.exists(filepath):
+        print(f"  WARNING: Metrics file not found: {filepath}")
+        return {}
 
-    if not os.path.exists(metrics_path):
-        print(f"  WARNING: Metrics file not found: {metrics_path}")
-        formatted_root = os.path.join(CHIPSIM_ROOT, "_results", "formatted_results")
-        if os.path.exists(formatted_root):
-            for candidate in sorted(os.listdir(formatted_root), reverse=True):
-                alt = os.path.join(formatted_root, candidate,
-                                   "formatted_comparison_metrics", "Approach_Comparison_Metrics.txt")
-                if os.path.exists(alt):
-                    print(f"  Found metrics at: {alt}")
-                    metrics_path = alt
-                    break
-            else:
-                return {}
-        else:
-            return {}
-
-    with open(metrics_path, 'r') as f:
+    with open(filepath, 'r') as f:
         content = f.read()
 
     metrics = {}
@@ -777,12 +761,43 @@ def parse_metrics_from_file(results_label: str) -> dict:
 
     metrics['per_model'] = per_model
     metrics['num_models'] = len(per_model)
-    metrics['results_label'] = results_label
+    metrics['metrics_file'] = filepath
 
-    print(f"  Parsed metrics from: {metrics_path}")
+    print(f"  Parsed metrics from: {filepath}")
     for model, vals in per_model.items():
         print(f"    {model}: {vals}")
     return metrics
+
+
+def parse_metrics_from_file(results_label: str) -> dict:
+    """Find and parse metrics for a given results label (iteration dump).
+    
+    Looks in CHIPSIM/_results/formatted_results/<results_label>/.
+    """
+    metrics_path = os.path.join(
+        CHIPSIM_ROOT, "_results", "formatted_results", results_label,
+        "formatted_comparison_metrics", "Approach_Comparison_Metrics.txt"
+    )
+
+    if not os.path.exists(metrics_path):
+        print(f"  WARNING: Metrics file not found: {metrics_path}")
+        formatted_root = os.path.join(CHIPSIM_ROOT, "_results", "formatted_results")
+        if os.path.exists(formatted_root):
+            for candidate in sorted(os.listdir(formatted_root), reverse=True):
+                alt = os.path.join(formatted_root, candidate,
+                                   "formatted_comparison_metrics", "Approach_Comparison_Metrics.txt")
+                if os.path.exists(alt):
+                    print(f"  Found metrics at: {alt}")
+                    metrics_path = alt
+                    break
+            else:
+                return {}
+        else:
+            return {}
+
+    result = _parse_metrics_file(metrics_path)
+    result['results_label'] = results_label
+    return result
 
 
 # ======================== EVALUATOR ========================
