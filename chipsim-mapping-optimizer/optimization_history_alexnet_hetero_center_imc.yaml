@@ -1,0 +1,117 @@
+baseline_metrics:
+  comm_latency: 106916.16
+  compute_latency: 661.09
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_center_imc/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 107577.25
+best_metrics:
+  comm_latency: 67968.94
+  compute_latency: 662.94
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_center_imc_improved_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_center_imc_improved_mapper
+  total_latency: 68631.88
+config: alexnet_hetero_center_imc
+history:
+- function_name: improved_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: '### Key weaknesses of the current nearest-neighbor approach
+
+
+    1. **Lack of Global Optimization**: The nearest-neighbor approach focuses on local
+    optimization by mapping each layer to the nearest availa'
+  function_name: improved_mapper
+  improvement_pct:
+    comm_latency: 36.427814092836854
+    compute_latency: -0.27984086886808496
+    total_latency: 36.20223606757004
+  iteration: 1
+  metrics:
+    comm_latency: 67968.94
+    compute_latency: 662.94
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_center_imc_improved_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 67968.94
+        compute_latency: 662.94
+        total_latency: 68631.88
+    results_label: alexnet_hetero_center_imc_improved_mapper
+    total_latency: 68631.88
+  outcome: IMPROVED
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 676, in run_simulation\n    chunk_result = self.simulate_compute(\n   \
+    \     model_name=model_name,\n    ...<4 lines>...\n        model_idx=model_idx\n\
+    \    )\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 447, in simulate_compute\n    return self.compute_simulator.simula"
+  function_name: improved_mapper
+  iteration: 2
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 676, in run_simulation\n    chunk_result = self.simulate_compute(\n   \
+    \     model_name=model_name,\n    ...<4 lines>...\n        model_idx=model_idx\n\
+    \    )\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 447, in simulate_compute\n    return self.compute_simulator.simula"
+  function_name: improved_mapper
+  iteration: 2
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 2
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 676, in run_simulation\n    chunk_result = self.simulate_compute(\n   \
+    \     model_name=model_name,\n    ...<4 lines>...\n        model_idx=model_idx\n\
+    \    )\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 447, in simulate_compute\n    return self.compute_simulator.simula"
+  function_name: improved_mapper
+  iteration: 2
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 3
+- change_summary: '### Key weaknesses of the current nearest-neighbor approach
+
+
+    1. **Lack of Global Optimization**: The current nearest-neighbor approach maps
+    each layer to the nearest available chiplet without consider'
+  function_name: improved_mapper
+  improvement_pct:
+    comm_latency: 0.0
+    compute_latency: 0.0
+    total_latency: 0.0
+  iteration: 2
+  metrics:
+    comm_latency: 106916.16
+    compute_latency: 661.09
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/2026.04.30_10.24.25_workload_alexnet_Garnet_non-pipelined_adj_matrix_10x10_mesh_mapping_100_cmos_with_io_100chiplets/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 106916.16
+        compute_latency: 661.09
+        total_latency: 107577.25
+    results_label: alexnet_hetero_center_imc_improved_mapper
+    total_latency: 107577.25
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 2

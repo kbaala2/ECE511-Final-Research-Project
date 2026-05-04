@@ -72,8 +72,8 @@ args = parse_args()
 # ---------------------------------------------------------------
 # CONFIGURATION
 # ---------------------------------------------------------------
-CHIPSIM_ROOT = "/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM"
-PROJECT_ROOT = "/home/rbaala2/ECE511-Final-Research-Project"
+CHIPSIM_ROOT = "/home/ECE511-Final-Research-Project/CHIPSIM"
+PROJECT_ROOT = "/home/ECE511-Final-Research-Project"
 BASELINE_RESULTS_ROOT = f"{PROJECT_ROOT}/performance_results/baseline/heterogenous"
 MAPPER_PATH = f"{CHIPSIM_ROOT}/src/mapping/model_mapper.py"
 MAPPER_ORIGINAL_PATH = f"{CHIPSIM_ROOT}/src/mapping/model_mapper_original.py"
