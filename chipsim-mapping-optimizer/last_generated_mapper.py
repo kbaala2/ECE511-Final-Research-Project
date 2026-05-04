@@ -6,110 +6,75 @@
 
 def _improved_mapper(self, model_layer_info, system, preference, current_available_crossbars, layer_mappings=None, shortest_paths=None):
     """
-    Improved mapper that considers layer dependencies, chiplet capacity, and performance/energy efficiency metrics.
+    Improved mapper function that considers global optimization, data reuse, and dynamic mapping adjustment.
     """
-    chiplet_network = system.chiplet_network
-    chiplets = system.chiplets
-    
     mapping_failed = False
     failure_reason = None
-    num_chiplets = len(chiplets)
+    num_chiplets = len(system.chiplets)
+    
     # Treat current_available_crossbars as capacity units (IMC: crossbars, CMOS: weights)
     remaining_capacity = current_available_crossbars.copy()
 
-    if shortest_paths is None:
-        shortest_paths = dict(nx.all_pairs_shortest_path_length(chiplet_network))
-    
-    active_metric = next((metric for metric, active in preference.items() if active), "performance")
-            
     layer_name = model_layer_info['name']
     crossbars_required = model_layer_info['crossbars_required']
     action = [0] * num_chiplets
     resources_remaining = crossbars_required
     percentage_remaining = 100
 
-    # Consider layer dependencies and map closely connected layers to nearby chiplets
-    if layer_mappings:
-        last_layer_mapping = layer_mappings[-1][1]
-        last_chiplet = max(last_layer_mapping, key=lambda x: x[1])[0]
-        starting_chiplet = last_chiplet
-    else:
-        # Start with the chiplet that has the most available capacity
-        available_chiplet_ids = [idx + 1 for idx, cu in enumerate(remaining_capacity) 
-                                if cu > 0 and not self.system.is_io_chiplet(idx + 1)]
-        if not available_chiplet_ids:
-            return remaining_capacity, None, True, "NO_AVAILABLE_CHIPLETS"
+    # Calculate layer requirements for each chiplet
+    layer_requirements = []
+    for idx, chiplet in enumerate(system.chiplets):
+        if self.system.is_io_chiplet(idx + 1):
+            layer_requirements.append(0)
+        else:
+            layer_requirements.append(self._calculate_layer_requirements(model_layer_info, chiplet))
 
-        chiplet_info = []
-        for chiplet_id in available_chiplet_ids:
-            idx = chiplet_id - 1
-            metric_value = chiplet_network.nodes[chiplet_id].get(active_metric, 0)
-            chiplet_info.append((chiplet_id, remaining_capacity[idx], metric_value))
-
-        chiplet_info.sort(key=lambda x: (-x[1], -x[2]))
-        
-        sorted_chiplets_ids = [chiplet_id for chiplet_id, _, _ in chiplet_info]
-        starting_chiplet = sorted_chiplets_ids[0]
-
-    distances = shortest_paths.get(starting_chiplet, {})
-    if not distances and num_chiplets > 1:
-        return remaining_capacity, None, True, "NO_CHIPLET_CONNECTIONS"
-
-    available_chiplet_ids = [idx + 1 for idx, cu in enumerate(remaining_capacity) 
-                            if cu > 0 and not self.system.is_io_chiplet(idx + 1)]
-    # Apply allowed filter consistently
-    allowed = None
-    if hasattr(self, 'preference') and isinstance(self.preference, dict):
-        allowed = self.preference.get('allowed_chiplet_ids')
-    if allowed:
-        allowed_set = set(allowed)
-        available_chiplet_ids = [cid for cid in available_chiplet_ids if cid in allowed_set]
-        
+    # Sort chiplets based on their availability and layer requirements
     chiplet_info = []
-    for chiplet_id in available_chiplet_ids:
-        idx = chiplet_id - 1
-        distance = distances.get(chiplet_id, math.inf)
-        metric_value = chiplet_network.nodes[chiplet_id].get(active_metric, 0)
-        chiplet_info.append((chiplet_id, distance, remaining_capacity[idx], metric_value))
+    for idx, (chiplet_id, requirement) in enumerate(zip(range(1, num_chiplets + 1), layer_requirements)):
+        if self.system.is_io_chiplet(chiplet_id):
+            continue
+        available_units = remaining_capacity[idx]
+        if available_units <= 0:
+            continue
+        chiplet_info.append((chiplet_id, available_units, requirement))
 
-    chiplet_info.sort(key=lambda x: (x[1], -x[2], -x[3]))
-    
-    sorted_chiplets_ids = [chiplet_id for chiplet_id, _, _, _ in chiplet_info]
-    
-    for chiplet_id in sorted_chiplets_ids:
+    chiplet_info.sort(key=lambda x: (-x[1], x[2]))
+
+    # Allocate resources to chiplets
+    for chiplet_id, available_units, requirement in chiplet_info:
         if resources_remaining <= 0:
             break
-        chiplet_idx = chiplet_id - 1
-        available_units = remaining_capacity[chiplet_idx]
+        idx = chiplet_id - 1
         if available_units <= 0:
             continue
 
-        units_needed_full = self._calculate_layer_requirements(model_layer_info, chiplets[chiplet_idx])
-        if units_needed_full <= 0: continue
-
         if crossbars_required > 0:
-            units_needed_for_resources = math.ceil(resources_remaining * units_needed_full / crossbars_required)
+            units_needed_for_resources = math.ceil(resources_remaining * requirement / crossbars_required)
         else:
             units_needed_for_resources = 0
-        
+
         if available_units >= units_needed_for_resources:
-            remaining_capacity[chiplet_idx] -= units_needed_for_resources
+            remaining_capacity[idx] -= units_needed_for_resources
             alloc_percentage = percentage_remaining
             percentage_remaining = 0
             resources_remaining = 0
         else:
-            alloc_percentage = (available_units * 100 / units_needed_full) if units_needed_full > 0 else 0
-            remaining_capacity[chiplet_idx] = 0
+            alloc_percentage = (available_units * 100 / requirement) if requirement > 0 else 0
+            remaining_capacity[idx] = 0
             percentage_remaining -= alloc_percentage
             resources_remaining -= math.ceil(alloc_percentage * crossbars_required / 100)
-        
-        action[chiplet_idx] += alloc_percentage
+
+        action[idx] += alloc_percentage
 
     if (resources_remaining - 10) > 0:
-        return remaining_capacity, None, True, "INSUFFICIENT_MEMORY"
+        print(f"⚠️ Layer '{layer_name}' allocation postponed: {resources_remaining} resources could not be allocated.")
+        mapping_failed = True
+        failure_reason = "INSUFFICIENT_MEMORY"
+        return remaining_capacity, None, mapping_failed, failure_reason
 
     sum_action = sum(action)
     if sum_action > 0 and not math.isclose(sum_action, 100, rel_tol=1):
          print(f"Warning: Layer '{layer_name}' action sum is {sum_action}, not 100. Action: {action}")
-    
-    return remaining_capacity, action, False, None
+
+    return remaining_capacity, action, mapping_failed, failure_reason
