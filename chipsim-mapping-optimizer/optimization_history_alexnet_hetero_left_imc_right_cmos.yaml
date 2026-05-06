@@ -1,0 +1,426 @@
+baseline_metrics:
+  comm_latency: 106878.12
+  compute_latency: 22.26
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_left_imc_right_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 106900.39
+best_metrics:
+  comm_latency: 79104.63
+  compute_latency: 265.09
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_left_imc_right_cmos_two_pass_communication_aware_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_left_imc_right_cmos_two_pass_communication_aware_mapper
+  total_latency: 79369.73
+config: alexnet_hetero_left_imc_right_cmos
+history:
+- error: Simulation timed out after 900 seconds.
+  function_name: partition_aware_nearest_neighbor
+  iteration: 1
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- function_name: partition_aware_nearest_neighbor
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 2
+- change_summary: "## Analysis of Nearest-Nighbor Mapper Weaknesses for Given Configuration\n\
+    \n### 1. Key Weaknesses of the Current Nearest-Nighbor Approach\n\n**A. Topology-Agnostic\
+    \ Network Distance Assumptions**\n- The mapper uses Manhattan distance (shortest\
+    \ path length) on a 10\xD710 mesh, but **ignores network contention** and **link\
+    \ bandwidth saturation**\n- Mesh networks have varying bisection bandwidth: center\
+    \ links carry more traffic than edges, but mapping treats all equal-distant chiplets\
+    \ as equivalent\n- **Problem**: Two chiplets 3 hops away could have very different\
+    \ communication costs if one path goes through congested center links vs. edge\
+    \ links\n\n**B. Homogeneous Treatment of Heterogeneous Resources**\n- The configuration\
+    \ has 96 CMOS_Compute chiplets (2.46M weights each) and 4 IO chiplets at corners\n\
+    - Current mapper only excludes IO chiplets but treats all CMOS chiplets identically\
+    \ despite potential **performance/power variations** (not modeled in chiplet_network\
+    \ nodes)\n- **Missing opportunity**: Could exploit spatial locality between CMOS\
+    \ chiplets and their nearest IO corners for input/output data movement\n\n**C.\
+    \ Greedy Layer-by-Layer Placement Without Global Optimization**\n- Each layer\
+    \ placement depends only on the previous layer's location (starting_chiplet)\n\
+    - **No look-ahead**: Doesn't consider future layers' communication patterns\n\
+    - **No backtracking**: Once a layer is placed, never reconsidered even if it causes\
+    \ downstream bottlenecks\n- **Example**: In AlexNet, early conv layers produce\
+    \ feature maps for later layers; placing them far from each other increases activation\
+    \ transfer costs\n\n**D. Inefficient Resource Fragmentation**\n- The `units_needed_for_resources`\
+    \ calculation: `ceil(resources_remaining \xD7 units_needed_full / crossbars_required)`\n\
+    - This **over-allocates** partial capacity when crossbars_required doesn't align\
+    \ with chiplet capacity\n- **Result**: Leaves unusable fragmented capacity on\
+    \ chiplets, reducing overall system utilization\n\n**E. Static Metric Preference\
+    \ Implementation**\n- The `active_metric` selection (performance vs energy_efficiency)\
+    \ is binary rather than weighted\n- Network node metrics are static and don't\
+    \ reflect **runtime state** (congestion, thermal throttling, DVFS states)\n- **Missing**:\
+    \ No adaptation to current network conditions or chiplet load\n\n### 2. Specific\
+    \ Opportunities for Improvement Given This Config\n\n**A. Exploit Mesh Symmetry\
+    \ with Corner IO Chiplets**\n- 4 IO chiplets at corners: Create **4 logical partitions**\
+    \ of 24 CMOS chiplets each\n- Assign layers to partitions based on **data flow\
+    \ direction** in AlexNet (sequential layers should stay in same partition)\n-\
+    \ Implement **partition-aware nearest neighbor** that prefers intra-partition\
+    \ placement before crossing partition boundaries\n\n**B. Layer Communication Pattern\
+    \ Awareness**\n- AlexNet layers have different communication characteristics:\n\
+    \  - Early conv layers: large activations, moderate weights\n  - FC layers: small\
+    \ activations, massive weights\n- **Opportunity**: Place weight-intensive layers\
+    \ closer to each other to minimize weight reloading\n- Current mapper treats all\
+    \ layers equally in distance calculation\n\n**C. Preferential Placement Near IO\
+    \ Corners**\n- Layers with high input/output data movement (first conv layer,\
+    \ last FC layer) should be placed closer to IO chiplets\n- **Implementation**:\
+    \ Add IO proximity as a weighting factor in sorting: `(distance, -IO_proximity,\
+    \ -available_memory, -metric_value)`\n\n**D. Capacity-Aware Distance Weighting**\n\
+    - Instead of pure hop count, use **weighted distance** = hops \xD7 (1 - available_capacity_ratio)\n\
+    - This encourages spreading load to underutilized regions rather than overloading\
+    \ nearby chiplets\n- **Formula**: `effective_distance = distance \xD7 (1 + \u03B1\
+    \ \xD7 occupancy_percentage)` where \u03B1 tunes the load-balancing effect\n\n\
+    ### 3. What Data/Signals the Mapper Currently Ignores\n\n**A. Inter-Layer Communication\
+    \ Volume**\n- The mapper has no knowledge of **activation sizes** between layers\n\
+    - **Critical for AlexNet**: Conv1\u2192Conv2 transfers ~290K activations, while\
+    \ Conv5\u2192FC6 transfers only ~9K\n- **Should use**: Activation tensor sizes\
+    \ to weight distance penalties between consecutive layers\n\n**B. Network Congestion\
+    \ State**\n- Mesh networks experience **hotspots** (especially center links)\n\
+    - **Missing**: Real-time or predicted link utilization data\n- **Should incorporate**:\
+    \ Historical congestion metrics or simulated contention estimates\n\n**C. Thermal/Power\
+    \ Constraints**\n- CMOS chiplets may have different thermal profiles based on\
+    \ utilization\n- **Missing**: Thermal models or power budgets that could affect\
+    \ placement decisions\n- **Important for**: Preventing hotspots and enabling performance\
+    \ throttling awareness\n\n**D. Data Reuse Opportunities**\n- **Weight reuse**:\
+    \ Consecutive layers with same input channels could share weights if placed together\n\
+    - **Activation reuse**: Multiple layers operating on same activation maps\n- Current\
+    \ mapper treats each layer independently, missing **co-location benefits**\n\n\
+    **E. Workload Batching Effects**\n- The mapper processes one inference at a time\n\
+    - **Missing**: Batch processing patterns where multiple inferences could be pipelined\
+    \ across spatial partitions\n- **Should consider**: Staggered layer placement\
+    \ to enable pipeline parallelism\n\n---\n\n### Recommended Improvements for This\
+    \ Specific Configuration:\n\n1. **Implement Partition-Aware Mapping**: \n   -\
+    \ Create 4 logical partitions (NW, NE, SW, SE) around corner IO chiplets\n   -\
+    \ Prefer intra-partition placement with fallback to nearest adjacent partition\n\
+    \n2. **Add Communication-Aware Cost Function**:\n   ```python\n   # Pseudo-code\
+    \ addition to sorting key\n   comm_cost = activation_size_between_layers * distance\n\
+    \   total_cost = comm_cost + (capacity_penalty * occupancy)\n   ```\n\n3. **Introduce\
+    \ Look-Ahead Window**:\n   - Consider next 2-3 layers when placing current layer\n\
+    \   - Use simple heuristic: if next layer has high activation transfer, place\
+    \ current layer centrally within partition\n\n4. **Implement Defragmentation Logic**:\n\
+    \   - Periodically reassign small leftover fractions to consolidate capacity\n\
+    \   - Use threshold-based cleanup (e.g., <5% fragments get redistributed)\n\n\
+    5. **Add IO-Aware Placement Priority**:\n   - Weight chiplet scores by `1/(distance_to_nearest_IO\
+    \ + 1)`\n   - Particularly important for first and last layers of network\n\n\
+    These improvements would better exploit the 10\xD710 mesh topology with corner\
+    \ IO chiplets and reduce communication overhead for AlexNet's distinct layer communication\
+    \ patterns."
+  function_name: partition_aware_nearest_neighbor
+  improvement_pct:
+    comm_latency: 0.0
+    compute_latency: 0.0
+    total_latency: 0.0
+  iteration: 1
+  metrics:
+    comm_latency: 106878.12
+    compute_latency: 22.26
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_left_imc_right_cmos_partition_aware_nearest_neighbor/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 106878.12
+        compute_latency: 22.26
+        total_latency: 106900.39
+    results_label: alexnet_hetero_left_imc_right_cmos_partition_aware_nearest_neighbor
+    total_latency: 106900.39
+  outcome: NO_IMPROVEMENT
+- function_name: two_pass_communication_aware_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on your analysis context and the previous optimization attempts,\
+    \ I'll focus on a different strategy that addresses the core weaknesses while\
+    \ being practical to implement. The key insight is that the **greedy layer-by-layer\
+    \ placement with only backward-looking dependencies** is fundamentally limiting.\n\
+    \n## NEW OPTIMIZATION STRATEGY: **Two-Pass Placement with Communication-Aware\
+    \ Cost Modeling**\n\n### Core Idea\nInstead of placing layers sequentially based\
+    \ only on previous layer location, we should:\n1. **First pass**: Analyze the\
+    \ entire layer graph to identify critical communication paths\n2. **Second pass**:\
+    \ Place layers with awareness of both forward and backward dependencies\n\n###\
+    \ Specific Implementation Changes\n\n#### 1. **Add Layer Graph Analysis in ModelMapper\
+    \ Initialization**\n```python\ndef _analyze_layer_dependencies(self, model_metrics):\n\
+    \    \"\"\"Analyze communication patterns between layers.\"\"\"\n    layer_graph\
+    \ = nx.DiGraph()\n    \n    for i, layer in enumerate(model_metrics):\n      \
+    \  layer_graph.add_node(i, \n                           size=layer.get('activation_size',\
+    \ 0),  # Need to add this to model metrics\n                           weights=layer.get('num_weights',\
+    \ 0),\n                           type=layer['layer_type'])\n        \n      \
+    \  # Add edges between consecutive layers with communication cost\n        if\
+    \ i > 0:\n            # Estimate activation transfer between layers\n        \
+    \    # For AlexNet: conv->conv, pool->conv, conv->fc patterns\n            prev_layer\
+    \ = model_metrics[i-1]\n            activation_size = self._estimate_activation_transfer(prev_layer,\
+    \ layer)\n            layer_graph.add_edge(i-1, i, weight=activation_size)\n \
+    \   \n    return layer_graph\n```\n\n#### 2. **Enhanced Nearest-Neighbor with\
+    \ Communication Lookahead**\nReplace the current `_nearest_neighbor_mapper_v3`\
+    \ with a version that considers:\n- Not just distance from previous layer, but\
+    \ **distance to multiple dependent layers**\n- **Weighted cost function** combining:\
+    \ previous layer proximity + next layer anticipation + load balancing\n\n```python\n\
+    def _enhanced_nearest_neighbor(self, model_layer_info, system, preference, \n\
+    \                              current_available_capacity, layer_mappings=None,\
+    \ \n                              shortest_paths=None, layer_graph=None, current_layer_idx=None):\n\
+    \    \"\"\"\n    Enhanced version considering both forward and backward dependencies.\n\
+    \    \"\"\"\n    # Existing initialization...\n    \n    # NEW: Calculate placement\
+    \ scores considering multiple dependencies\n    if layer_mappings and current_layer_idx\
+    \ is not None and layer_graph is not None:\n        # Get communication with previous\
+    \ layer\n        prev_layer_id = current_layer_idx - 1\n        prev_comm_weight\
+    \ = layer_graph[prev_layer_id][current_layer_idx]['weight'] if prev_layer_id >=\
+    \ 0 else 0\n        \n        # Look ahead to next layer (if exists)\n       \
+    \ next_comm_weight = 0\n        if current_layer_idx + 1 < len(layer_graph.nodes()):\n\
+    \            next_comm_weight = layer_graph[current_layer_idx][current_layer_idx\
+    \ + 1]['weight']\n        \n        # For each chiplet, calculate weighted cost\n\
+    \        chiplet_scores = []\n        for chiplet_id in available_chiplet_ids:\n\
+    \            idx = chiplet_id - 1\n            \n            # Distance cost from\
+    \ previous layer (if placed)\n            prev_cost = 0\n            if layer_mappings\
+    \ and prev_layer_id >= 0:\n                # Find where previous layer was placed\
+    \ (weighted centroid)\n                prev_placement = self._find_layer_centroid(layer_mappings[-1][1])\n\
+    \                if prev_placement:\n                    distance = shortest_paths.get(prev_placement,\
+    \ {}).get(chiplet_id, math.inf)\n                    prev_cost = prev_comm_weight\
+    \ * distance\n            \n            # Anticipatory cost for next layer (estimated)\n\
+    \            next_cost = 0\n            if next_comm_weight > 0:\n           \
+    \     # Estimate next layer's likely placement region\n                # For AlexNet:\
+    \ conv layers cluster, fc layers cluster\n                likely_region = self._predict_next_layer_region(current_layer_idx,\
+    \ model_layer_info)\n                distance_to_region = self._distance_to_region(chiplet_id,\
+    \ likely_region, shortest_paths)\n                next_cost = next_comm_weight\
+    \ * distance_to_region\n            \n            # Load balancing cost\n    \
+    \        occupancy = occupancy_percentages[idx]\n            load_cost = occupancy\
+    \ * 0.1  # Penalize highly occupied chiplets\n            \n            # IO proximity\
+    \ benefit (for first/last layers)\n            io_benefit = 0\n            if\
+    \ current_layer_idx == 0 or current_layer_idx == len(layer_graph.nodes()) - 1:\n\
+    \                io_distance = self._distance_to_nearest_io(chiplet_id, shortest_paths)\n\
+    \                io_benefit = 100 / (io_distance + 1)  # Inverse distance benefit\n\
+    \            \n            total_score = -prev_cost - next_cost - load_cost +\
+    \ io_benefit\n            chiplet_scores.append((chiplet_id, total_score))\n \
+    \       \n        chiplet_scores.sort(key=lambda x: x[1], reverse=True)\n    \
+    \    sorted_chiplets_ids = [cid for cid, _ in chiplet_scores]\n    \n    # Rest\
+    \ of allocation logic remains similar but uses sorted_chiplets_ids\n```\n\n####\
+    \ 3. **Mesh Partition Optimization for 10\xD710 Grid**\nGiven 4 corner IO chiplets,\
+    \ implement intelligent partitioning:\n\n```python\ndef _create_mesh_partitions(self):\n\
+    \    \"\"\"Divide 10x10 mesh into 4 logical partitions around IO chiplets.\"\"\
+    \"\n    partitions = {\n        'NW': [],  # Northwest partition (IO at 0,0)\n\
+    \        'NE': [],  # Northeast partition (IO at 0,9)\n        'SW': [],  # Southwest\
+    \ partition (IO at 9,0)\n        'SE': [],  # Southeast partition (IO at 9,9)\n\
+    \    }\n    \n    for chiplet_id in range(1, 101):  # 10x10 = 100 chiplets\n \
+    \       if self.system.is_io_chiplet(chiplet_id):\n            continue\n    \
+    \        \n        row = (chiplet_id - 1) // 10\n        col = (chiplet_id - 1)\
+    \ % 10\n        \n        if row < 5:\n            if col < 5:\n             \
+    \   partitions['NW'].append(chiplet_id)\n            else:\n                partitions['NE'].append(chiplet_id)\n\
+    \        else:\n            if col < 5:\n                partitions['SW'].append(chiplet_id)\n\
+    \            else:\n                partitions['SE'].append(chiplet_id)\n    \n\
+    \    return partitions\n```\n\n#### 4. **Layer Type-Based Placement Strategy**\n\
+    AlexNet has clear phases: early conv \u2192 middle conv \u2192 late conv \u2192\
+    \ FC layers\n\n```python\ndef _get_layer_placement_strategy(self, layer_idx, layer_type,\
+    \ total_layers):\n    \"\"\"Determine placement strategy based on layer position\
+    \ and type.\"\"\"\n    phase_ratio = layer_idx / total_layers\n    \n    if layer_type\
+    \ == 'conv':\n        if phase_ratio < 0.25:  # Early conv layers\n          \
+    \  return {'prefer_io_proximity': True, 'allow_cross_partition': False}\n    \
+    \    elif phase_ratio < 0.75:  # Middle conv layers\n            return {'prefer_io_proximity':\
+    \ False, 'allow_cross_partition': True}\n        else:  # Late conv layers\n \
+    \           return {'prefer_io_proximity': False, 'allow_cross_partition': False,\
+    \ 'prefer_fc_proximity': True}\n    else:  # FC layers\n        return {'prefer_io_proximity':\
+    \ True, 'cluster_together': True, 'allow_cross_partition': False}\n```\n\n####\
+    \ 5. **Capacity Defragmentation Logic**\nAdd periodic consolidation to reduce\
+    \ fragmentation:\n\n```python\ndef _defragment_if_needed(self, remaining_capacity,\
+    \ chiplets):\n    \"\"\"Consolidate small fragmented capacity.\"\"\"\n    fragmentation_threshold\
+    \ = 0.05  # 5% of chiplet capacity is considered fragmented\n    \n    for idx,\
+    \ chiplet in enumerate(chiplets):\n        if self.system.is_io_chiplet(idx +\
+    \ 1):\n            continue\n            \n        total_capacity = chiplet.get_total_capacity()\n\
+    \        available = remaining_capacity[idx]\n        utilized = total_capacity\
+    \ - available\n        \n        if available > 0 and (available / total_capacity)\
+    \ < fragmentation_threshold:\n            # This chiplet has small fragmented\
+    \ space\n            # Try to move this capacity to a neighbor with more space\n\
+    \            self._redistribute_fragmented_capacity(idx, remaining_capacity, chiplets)\n\
+    \    \n    return remaining_capacity\n```\n\n### Why This Strategy is Different\
+    \ from Previous Attempts:\n\n1. **Not just backward-looking**: Considers both\
+    \ previous AND next layer dependencies\n2. **Layer-type awareness**: Different\
+    \ strategies for conv vs FC layers in AlexNet\n3. **Mesh partition utilization**:\
+    \ Explicitly uses the 4-corner IO structure\n4. **Proactive defragmentation**:\
+    \ Addresses capacity fragmentation before it causes mapping failures\n5. **Weighted\
+    \ multi-factor scoring**: Not just distance, but communication volume, load, and\
+    \ IO proximity\n\n### Expected Benefits for AlexNet on 10\xD710 Mesh:\n\n1. **Early\
+    \ conv layers** will cluster near IO chiplets for efficient input loading\n2.\
+    \ **FC layers** will cluster together to minimize weight transfer overhead\n3.\
+    \ **Communication-intensive consecutive layers** will stay in same mesh partition\n\
+    4. **Load will spread** across all 4 partitions rather than overloading one region\n\
+    5. **Fragmentation reduction** will improve overall capacity utilization\n\nThis\
+    \ approach directly addresses the \"greedy without look-ahead\" weakness while\
+    \ being implementable without requiring a full global optimizer (which would be\
+    \ computationally expensive)."
+  function_name: two_pass_communication_aware_mapper
+  improvement_pct:
+    comm_latency: 25.986132615356627
+    compute_latency: -1090.8805031446539
+    total_latency: 25.753563668009072
+  iteration: 2
+  metrics:
+    comm_latency: 79104.63
+    compute_latency: 265.09
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_left_imc_right_cmos_two_pass_communication_aware_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 79104.63
+        compute_latency: 265.09
+        total_latency: 79369.73
+    results_label: alexnet_hetero_left_imc_right_cmos_two_pass_communication_aware_mapper
+    total_latency: 79369.73
+  outcome: IMPROVED
+- function_name: weight_aware_affinity_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Looking at the previous optimization attempts and the specific\
+    \ weaknesses of the current nearest-neighbor mapper, I'll propose a different\
+    \ optimization strategy that directly addresses the core limitations while being\
+    \ practical to implement.\n\n## NEW OPTIMIZATION STRATEGY: **Weighted Cost-Based\
+    \ Placement with Layer Affinity Clustering**\n\n### Core Insight\nThe fundamental\
+    \ issue is that the current algorithm only considers **distance to the previous\
+    \ layer** and **available capacity**. It misses:\n1. **Weight transfer costs**\
+    \ - crucial for CMOS chiplets where weights are loaded from memory\n2. **Layer\
+    \ affinity groups** - layers with similar characteristics should cluster\n3. **Spatial\
+    \ spreading** - to avoid network hotspots in the mesh\n\n### Specific Implementation\
+    \ Changes\n\n#### 1. **Weight Transfer-Aware Cost Function**\nFor CMOS chiplets,\
+    \ weight loading is a major bottleneck. We should track where weights are stored:\n\
+    \n```python\ndef _calculate_weight_transfer_cost(self, chiplet_id, layer_info,\
+    \ weight_locations):\n    \"\"\"\n    Calculate cost of transferring weights to\
+    \ a chiplet.\n    weight_locations: dict mapping layer_id -> list of (chiplet_id,\
+    \ weight_fraction)\n    \"\"\"\n    if not weight_locations:\n        return 0\n\
+    \    \n    total_cost = 0\n    for prev_layer_id, locations in weight_locations.items():\n\
+    \        for prev_chiplet_id, fraction in locations:\n            if prev_chiplet_id\
+    \ == chiplet_id:\n                continue  # Same chiplet, no transfer cost\n\
+    \            distance = self.shortest_paths[prev_chiplet_id][chiplet_id]\n   \
+    \         # Weight cost proportional to fraction and distance\n            total_cost\
+    \ += fraction * distance * layer_info.get('weight_reuse_factor', 1.0)\n    \n\
+    \    return total_cost\n```\n\n#### 2. **Layer Affinity Groups for AlexNet**\n\
+    AlexNet has natural clusters:\n- **Early conv layers** (1-2): Large activations,\
+    \ benefit from IO proximity\n- **Middle conv layers** (3-5): Moderate activations,\
+    \ can be placed centrally\n- **FC layers** (6-8): Massive weights, should cluster\
+    \ together\n\n```python\ndef _identify_layer_affinity_group(self, layer_idx, layer_info,\
+    \ total_layers):\n    \"\"\"Assign layer to an affinity group based on its characteristics.\"\
+    \"\"\n    layer_type = layer_info['layer_type']\n    weights = layer_info.get('num_weights',\
+    \ 0)\n    macs = layer_info.get('total_macs', 0)\n    \n    if layer_type == 'conv':\n\
+    \        if layer_idx < 2:  # First 2 conv layers\n            return 'early_conv'\n\
+    \        elif layer_idx < 5:  # Next 3 conv layers\n            return 'mid_conv'\n\
+    \        else:  # Last conv layer\n            return 'late_conv'\n    elif layer_type\
+    \ == 'fc':\n        return 'fc_cluster'\n    else:\n        return 'other'\n```\n\
+    \n#### 3. **Enhanced Nearest-Neighbor with Multi-Factor Scoring**\nReplace the\
+    \ current distance-only sorting with a weighted scoring system:\n\n```python\n\
+    def _enhanced_nearest_neighbor_v4(self, model_layer_info, system, preference,\
+    \ \n                                 current_available_capacity, layer_mappings=None,\
+    \ \n                                 shortest_paths=None, layer_idx=0, affinity_groups=None):\n\
+    \    \"\"\"\n    Enhanced mapper with multi-factor cost optimization.\n    \"\"\
+    \"\n    # ... existing initialization ...\n    \n    # Calculate scores for each\
+    \ available chiplet\n    chiplet_scores = []\n    \n    for chiplet_id in available_chiplet_ids:\n\
+    \        idx = chiplet_id - 1\n        score = 0\n        \n        # 1. Distance\
+    \ to previous layer (existing logic, but weighted)\n        if layer_mappings\
+    \ and layer_idx > 0:\n            prev_centroid = self._find_layer_centroid(layer_mappings[-1][1])\n\
+    \            if prev_centroid:\n                distance = shortest_paths[prev_centroid][chiplet_id]\n\
+    \                # Weight by activation size between layers\n                activation_weight\
+    \ = self._estimate_activation_weight(layer_idx-1, layer_idx)\n               \
+    \ score -= distance * activation_weight * 10  # Penalty for distance\n       \
+    \ \n        # 2. Available capacity (positive factor)\n        capacity_ratio\
+    \ = remaining_capacity[idx] / chiplets[idx].get_total_capacity()\n        score\
+    \ += capacity_ratio * 50\n        \n        # 3. Weight transfer cost (NEW)\n\
+    \        weight_cost = self._calculate_weight_transfer_cost(chiplet_id, model_layer_info,\
+    \ \n                                                          self.weight_locations)\n\
+    \        score -= weight_cost * 5\n        \n        # 4. Affinity group clustering\
+    \ (NEW)\n        if affinity_groups and layer_idx in affinity_groups:\n      \
+    \      group = affinity_groups[layer_idx]\n            group_chiplets = self.affinity_group_placements.get(group,\
+    \ [])\n            if group_chiplets:\n                # Calculate average distance\
+    \ to group members\n                avg_distance = np.mean([shortest_paths[g_id][chiplet_id]\
+    \ \n                                       for g_id in group_chiplets])\n    \
+    \            score -= avg_distance * 20  # Penalize distance from group\n    \
+    \        else:\n                # First in group - prefer regions with empty neighbors\n\
+    \                empty_neighbors = self._count_empty_neighbors(chiplet_id, \n\
+    \                                                             remaining_capacity)\n\
+    \                score += empty_neighbors * 15\n        \n        # 5. Mesh hotspot\
+    \ avoidance (NEW)\n        row, col = self._chiplet_to_coords(chiplet_id)\n  \
+    \      # Penalize center of mesh (rows/cols 4-5) to avoid congestion\n       \
+    \ if 3 <= row <= 6 and 3 <= col <= 6:\n            score -= 25  # Center penalty\n\
+    \        elif row < 2 or row > 7 or col < 2 or col > 7:\n            score +=\
+    \ 10  # Edge bonus\n        \n        # 6. IO proximity for first/last layers\n\
+    \        if layer_idx == 0 or layer_idx == self.total_layers - 1:\n          \
+    \  io_distance = self._distance_to_nearest_io(chiplet_id)\n            score +=\
+    \ 100 / (io_distance + 1)\n        \n        chiplet_scores.append((chiplet_id,\
+    \ score))\n    \n    # Sort by score (highest first)\n    chiplet_scores.sort(key=lambda\
+    \ x: x[1], reverse=True)\n    sorted_chiplets_ids = [cid for cid, _ in chiplet_scores]\n\
+    \    \n    # ... rest of allocation logic ...\n```\n\n#### 4. **Batch-Aware Weight\
+    \ Preloading**\nFor CMOS chiplets, we can optimize weight loading by tracking\
+    \ where weights are stored:\n\n```python\nclass WeightLocationTracker:\n    def\
+    \ __init__(self):\n        self.weight_locations = {}  # layer_id -> [(chiplet_id,\
+    \ weight_fraction)]\n    \n    def update(self, layer_idx, layer_mapping):\n \
+    \       \"\"\"Track where each layer's weights are placed.\"\"\"\n        self.weight_locations[layer_idx]\
+    \ = []\n        for chiplet_id, percentage in layer_mapping:\n            if percentage\
+    \ > 0:\n                self.weight_locations[layer_idx].append((chiplet_id, percentage/100))\n\
+    \    \n    def get_optimal_placement(self, chiplet_id, layer_info, next_layer_info=None):\n\
+    \        \"\"\"Suggest optimal chiplet for weight reuse.\"\"\"\n        # Check\
+    \ if this layer shares weights with previous layers\n        reuse_candidates\
+    \ = []\n        for prev_layer_id, locations in self.weight_locations.items():\n\
+    \            # Simple heuristic: layers with similar dimensions might share weights\n\
+    \            if self._layers_share_weights(prev_layer_id, layer_info):\n     \
+    \           for loc_chiplet_id, fraction in locations:\n                    if\
+    \ fraction > 0.3:  # Significant weight fraction\n                        reuse_candidates.append((loc_chiplet_id,\
+    \ fraction))\n        \n        if reuse_candidates:\n            # Prefer chiplets\
+    \ with existing weights\n            return max(reuse_candidates, key=lambda x:\
+    \ x[1])[0]\n        return None\n```\n\n#### 5. **Dynamic Load Balancing with\
+    \ Capacity Reservation**\nReserve capacity for future layers based on their requirements:\n\
+    \n```python\ndef _predict_future_demand(self, layer_idx, model_metrics):\n   \
+    \ \"\"\"Predict capacity needs for upcoming layers.\"\"\"\n    lookahead = 3\n\
+    \    future_demand = {}\n    \n    for i in range(layer_idx + 1, min(layer_idx\
+    \ + lookahead + 1, len(model_metrics))):\n        layer = model_metrics[i]\n \
+    \       layer_type = layer['layer_type']\n        \n        # Different capacity\
+    \ patterns\n        if layer_type == 'fc':\n            # FC layers need more\
+    \ weight capacity\n            future_demand.setdefault('weight_intensive', 0)\n\
+    \            future_demand['weight_intensive'] += 1\n        else:\n         \
+    \   # Conv layers need more compute\n            future_demand.setdefault('compute_intensive',\
+    \ 0)\n            future_demand['compute_intensive'] += 1\n    \n    return future_demand\n\
+    ```\n\n### 6. **Mesh Region-Based Placement**\nGiven the 10\xD710 mesh with corner\
+    \ IO, create strategic regions:\n\n```python\ndef _get_mesh_region(self, chiplet_id):\n\
+    \    \"\"\"Get the mesh region for a chiplet.\"\"\"\n    row, col = self._chiplet_to_coords(chiplet_id)\n\
+    \    \n    if row < 5:\n        if col < 5:\n            return 'NW'\n       \
+    \ else:\n            return 'NE'\n    else:\n        if col < 5:\n           \
+    \ return 'SW'\n        else:\n            return 'SE'\n\ndef _balance_regions(self,\
+    \ remaining_capacity):\n    \"\"\"Ensure load is balanced across mesh regions.\"\
+    \"\"\n    region_capacity = {'NW': 0, 'NE': 0, 'SW': 0, 'SE': 0}\n    \n    for\
+    \ idx, capacity in enumerate(remaining_capacity):\n        if capacity > 0 and\
+    \ not self.system.is_io_chiplet(idx + 1):\n            region = self._get_mesh_region(idx\
+    \ + 1)\n            region_capacity[region] += capacity\n    \n    return region_capacity\n\
+    ```\n\n### Implementation Strategy:\n\n1. **Phase 1: Layer Analysis**\n   - Analyze\
+    \ AlexNet layer characteristics\n   - Group layers by affinity (early_conv, mid_conv,\
+    \ late_conv, fc_cluster)\n   - Estimate communication volumes between layers\n\
+    \n2. **Phase 2: Strategic Placement**\n   - Place early conv layers near their\
+    \ closest IO chiplet\n   - Place FC layers in a tight cluster (same region)\n\
+    \   - Balance load across all 4 mesh quadrants\n\n3. **Phase 3: Adaptive Allocation**\n\
+    \   - Use weighted scoring for each chiplet\n   - Consider weight transfer costs\
+    \ for CMOS\n   - Reserve capacity for future layers\n\n4. **Phase 4: Continuous\
+    \ Optimization**\n   - Track weight locations for reuse\n   - Defragment when\
+    \ capacity < threshold\n   - Adjust based on runtime performance feedback\n\n\
+    ### Why This is Different from Previous Attempts:\n\n1. **Multi-factor optimization**\
+    \ - Not just distance, but 6 different factors\n2. **Weight transfer awareness**\
+    \ - Critical for CMOS chiplet performance\n3. **Affinity clustering** - Groups\
+    \ similar layers together\n4. **Mesh-aware placement** - Avoids center congestion,\
+    \ uses edge benefits\n5. **Lookahead prediction** - Reserves capacity for future\
+    \ needs\n6. **Region balancing** - Distributes load across all 4 mesh quadrants\n\
+    \nThis approach directly targets the weaknesses in the current mapper while being\
+    \ computationally efficient enough to run at mapping time. The weighted scoring\
+    \ system provides a flexible way to balance multiple competing objectives without\
+    \ requiring complex global optimization."
+  function_name: weight_aware_affinity_mapper
+  improvement_pct:
+    comm_latency: -22.037504027952593
+    compute_latency: -2867.2506738544475
+    total_latency: -22.62994550347292
+  iteration: 3
+  metrics:
+    comm_latency: 130431.39
+    compute_latency: 660.51
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_left_imc_right_cmos_weight_aware_affinity_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 130431.39
+        compute_latency: 660.51
+        total_latency: 131091.89
+    results_label: alexnet_hetero_left_imc_right_cmos_weight_aware_affinity_mapper
+    total_latency: 131091.89
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

@@ -49,6 +49,11 @@ from langchain_groq import ChatGroq
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
+from langchain_openai import ChatOpenAI
+
+# # Prompt for key if missing
+# if not os.environ.get("OPENROUTER_API_KEY"):
+#     os.environ["OPENROUTER_API_KEY"] = getpass.getpass("OPENROUTER_API_KEY: ")
 
 load_dotenv()
 
@@ -162,9 +167,21 @@ class ChipSimState(TypedDict):
 # 2. CREATE THE LLM
 # ---------------------------------------------------------------
 
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY"),
+# llm = ChatGroq(
+#     model="llama-3.3-70b-versatile",
+#     api_key=os.getenv("OPENROUTER_API_KE"),
+# )
+
+# llm = ChatOpenAI(
+#     model="meta-llama/llama-3.3-70b-instruct",
+#     base_url="https://openrouter.ai/api/v1",
+#     api_key=os.environ["OPENROUTER_API_KEY"]
+# )
+
+llm = ChatOpenAI(
+    model="deepseek/deepseek-v3.2",
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.environ["OPENROUTER_API_KEY"]
 )
 
 #llm = ChatOllama(model="qwen3.6:35b", base_url="http://192.168.50.4:11434", num_ctx=16384)
@@ -249,7 +266,7 @@ def analyze_config(state: ChipSimState) -> dict:
             + "\n".join(
                 f"  Iteration {h['iteration']}: {h['outcome']} "
                 f"(latency: {h.get('metrics', {}).get('total_latency', 'N/A')}, "
-                f"change: {h.get('change_summary', 'N/A')[:100]})"
+                f"change: {h.get('change_summary', 'N/A')})"
                 for h in state["history"]
             )
             + "\n\nBased on these results, try a DIFFERENT optimization strategy."
@@ -867,7 +884,7 @@ def evaluate_results(state: ChipSimState) -> dict:
         "metrics": latest_metrics,
         "improvement_pct": improvement_pct,
         "function_name": function_name,
-        "change_summary": state.get("config_analysis", "")[:200],
+        "change_summary": state.get("config_analysis", ""),
     }
 
     new_best = latest_metrics if is_improvement else best
