@@ -1,0 +1,423 @@
+baseline_metrics:
+  comm_latency: 273843.44
+  compute_latency: 50.47
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/resnet50_hetero_imc_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 273893.9
+best_metrics:
+  comm_latency: 251527.18
+  compute_latency: 3900.75
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_imc_heavy_optimized_mapper_v2/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: resnet50_hetero_imc_heavy_optimized_mapper_v2
+  total_latency: 255427.93
+config: resnet50_hetero_imc_heavy
+history:
+- error: "Traceback (most recent call last):\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\", line\
+    \ 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n             \
+    \         ^^^^^^^^^^^^\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 51, in run\n    self._run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 122, in _run_simulation\n    self.gm.run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  function_name: optimized_mapper
+  iteration: 1
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- error: "Traceback (most recent call last):\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\", line\
+    \ 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n             \
+    \         ^^^^^^^^^^^^\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 51, in run\n    self._run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 122, in _run_simulation\n    self.gm.run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  function_name: improved_mapper_v1
+  iteration: 1
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 2
+- function_name: optimized_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 3
+- change_summary: "**1. Key weaknesses of the current nearest\u2011neighbor approach**\n\
+    \n* **Greedy, sequential decision making** \u2013 The mapper assigns one layer\
+    \ at a time with no global planning. The placement of each layer depends only\
+    \ on the chiplet that received the largest fraction of the *previous* layer. This\
+    \ \u201Cchain\u201D mapping cannot optimize the overall layout for a deep network\
+    \ like ResNet\u201150; one poor early decision irrevocably constrains all later\
+    \ placements.\n* **Proximity bias leads to clustering and imbalance** \u2013 The\
+    \ algorithm fills the chiplet nearest to the previous hotspot first, then moves\
+    \ outward. This tends to pack many layers onto a small set of chiplets, leaving\
+    \ most of the 96 CMOS tiles under\u2011utilised, creating memory fragmentation\
+    \ and potential communication hotspots.\n* **Ignores inter\u2011layer data volumes**\
+    \ \u2013 The mapper never examines the size of the activations that flow between\
+    \ layers. Placement decisions are made solely on *distance* and *memory*, without\
+    \ considering how many bytes must be moved. This is a critical omission for a\
+    \ weight\u2011stationary architecture where all movement is activation traffic.\n\
+    * **Unaware of skip connections or branching** \u2013 ResNet\u201150 contains\
+    \ residual (skip) connections. The mapper processes layers in their sequential\
+    \ order and always anchors the next layer to the *immediately preceding* layer\u2019\
+    s primary chiplet. A later layer that receives a skip from an earlier layer may\
+    \ end up far from the layer that actually supplies its main input, incurring unnecessary\
+    \ long\u2011distance communication.\n* **No consideration of network congestion\
+    \ or bandwidth** \u2013 Only the hop\u2011count (shortest path length) is used.\
+    \ The actual mesh topology, link sharing, and potential for contention under heavy\
+    \ traffic are ignored. A placement that looks good in terms of distance can still\
+    \ cause oversubscribed links.\n* **Primitive partitioning logic** \u2013 When\
+    \ a layer must be split across multiple chiplets, the sub\u2011layers are assigned\
+    \ in nearest\u2011neighbour order from the starting chiplet. They are not guaranteed\
+    \ to form a compact cluster; the resulting chiplets may be spread in a line, increasing\
+    \ the communication cost for partial\u2011sum gathering.\n* **No utilisation of\
+    \ IO chiplet locations** \u2013 The four IO tiles at the corners are the entrances\
+    \ for initial input and final output. The mapper places the first layer on the\
+    \ chiplet with the most free memory, which could be far from any corner, wasting\
+    \ the opportunity to minimise the first\u2011hop latency for large input activations.\n\
+    \n**2. Specific opportunities for improvement given this configuration**\n\n*\
+    \ **Use activation sizes to weight placement decisions** \u2013 The workload CSV\
+    \ already includes `input_activation` for each layer. The mapper can incorporate\
+    \ that as a cost weight: prefer to place layers that exchange large tensors on\
+    \ the same or adjacent chiplets, while small activations may tolerate longer distances.\
+    \ This would directly reduce average communication latency.\n* **Implement a multi\u2011\
+    pass or iterative improvement (e.g., simulated annealing)** \u2013 With only 96\
+    \ chiplets and a known mesh, even a light\u2011weight global search (swap layers\
+    \ between tiles, re\u2011anchor on IO corners) can find much better mappings than\
+    \ a single greedy pass, especially for a network with skip connections.\n* **Explicitly\
+    \ model the data\u2011flow graph** \u2013 Instead of treating the model as a linear\
+    \ sequence, use the DAG from the model definition. Place layers such that both\
+    \ sequential *and* skipping edges are short; assign a combined distance cost for\
+    \ all active output edges of a layer.\n* **First\u2011layer placement near an\
+    \ IO corner** \u2013 The starting chiplet for the very first layer should be the\
+    \ one with sufficient memory that is closest to *any* IO chiplet on the mesh (Manhattan\
+    \ distance to the nearest corner). This cuts the initial data distribution latency.\n\
+    * **Place partitioned sub\u2011layers in a compact cluster** \u2013 After deciding\
+    \ the set of chiplets for a split layer, ensure they form a contiguous block (e.g.,\
+    \ a 2\xD72 or 3\xD71 rectangle) to minimise the all\u2011to\u2011all communication\
+    \ needed when aggregating partial output channels.\n* **Balance memory load across\
+    \ the mesh** \u2013 Instead of filling a tile completely before moving to its\
+    \ neighbour, the mapper could target a uniform memory occupancy, leaving room\
+    \ for co\u2011location of small layers that consume very little capacity. This\
+    \ avoids creating distant placements for tiny layers that could have been hosted\
+    \ on the same chiplet as their producer.\n* **Leverage the performance metric\
+    \ from chiplet graph** \u2013 The active metric (\u201Cperformance\u201D) is currently\
+    \ only a tiebreaker. If it encodes compute speed or energy efficiency, use it\
+    \ more heavily to prefer chiplets that deliver higher throughput for large layers,\
+    \ while offloading small layers to slower (or less favourable) tiles.\n\n**3.\
+    \ Data / signals the mapper currently ignores that it should use**\n\n| Ignored\
+    \ signal | Available in | Why it matters |\n|----------------|--------------|----------------|\n\
+    | Activation tensor size per layer | `layer_info['input_activation']` | Determines\
+    \ communication volume; large activations should avoid long paths. |\n| Layer\
+    \ connectivity graph (skip/branch edges) | Model definition / workload CSV structure\
+    \ | Residual connections require that non\u2011sequential neighbours be placed\
+    \ closely. |\n| IO chiplet positions (corners of 10\xD710 mesh) | `system.chiplet_network`\
+    \ (node attributes) | First/last layers should be near I/O to reduce input loading\
+    \ and result collection latency. |\n| Chiplet compute throughput / power metrics\
+    \ | Node attribute `active_metric` (currently only a tiebreaker) | Could be used\
+    \ to assign heavy layers to faster tiles for load balancing. |\n| Available link\
+    \ bandwidth and congestion state | Not directly available, but can be inferred\
+    \ from topology and traffic estimates | Prevents oversubscription of busy mesh\
+    \ routes. |\n| Estimated execution time per layer | Can be derived from MACs and\
+    \ chiplet speed | Enables true load balancing across all available compute tiles.\
+    \ |\n| Memory capacity utilisation percentage | Already partially used, but not\
+    \ for balancing | Should discourage \u201Cfull\u201D tiles early in the mapping\
+    \ to preserve co\u2011location opportunities for future small layers. |\n| Partition\
+    \ sub\u2011placement geometry | Not considered | Must ensure that chiplets hosting\
+    \ fractions of the same layer form a contiguous, low\u2011diameter set. |"
+  function_name: optimized_mapper
+  improvement_pct:
+    comm_latency: 4.061536036795331
+    compute_latency: -1.3671488012680757
+    total_latency: 4.0605358498309005
+  iteration: 1
+  metrics:
+    comm_latency: 262721.19
+    compute_latency: 51.16
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_imc_heavy_optimized_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 262721.19
+        compute_latency: 51.16
+        total_latency: 262772.34
+    results_label: resnet50_hetero_imc_heavy_optimized_mapper
+    total_latency: 262772.34
+  outcome: IMPROVED
+- function_name: optimized_mapper_v2
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "**1. Key weaknesses of the current nearest\u2011neighbor approach**\n\
+    \n- **Greedy, step\u2011by\u2011step chain mapping**  \n  The mapper processes\
+    \ layers sequentially, anchoring each new layer on the chiplet that received the\
+    \ largest fraction of the *immediately previous* layer. There is no global overview:\
+    \ the entire mapping depends on the first\u2011layer choice and then on a single\
+    \ \u201Cbest neighbour\u201D chain. This works poorly for a deep, branching network\
+    \ like ResNet\u201150, where one early mis\u2011placement forces an entire tail\
+    \ of layers into a sub\u2011optimal region.\n\n- **Proximity\u2011driven clustering,\
+    \ under\u2011utilisation of mesh**  \n  Because the algorithm fills the nearest\u2011\
+    neighbour with available capacity before moving outward, layers tend to lump together\
+    \ on a small cluster of chiplets. With 96 high\u2011capacity CMOS tiles (2.46\u202F\
+    M weights each), many tiles remain nearly empty. This creates communication hotspots,\
+    \ memory fragmentation, and unnecessary long\u2011distance hops for later layers\
+    \ that could have been spread out.\n\n- **Complete disregard for inter\u2011layer\
+    \ communication volume**  \n  The mapper never examines `input_activation` (the\
+    \ size of the activation tensor that travels between layers). Two layers that\
+    \ exchange a huge tensor are placed as if they were exchanging a few bytes; a\
+    \ small layer may be pushed far away from its producer, adding worst\u2011case\
+    \ latency to a minor data transfer, while a large activation is forced over multiple\
+    \ hops.\n\n- **No awareness of residual (skip) connections**  \n  ResNet\u2011\
+    50\u2019s skip connections mean that layer **N** receives data not only from layer\
+    \ **N\u20111** but also from an earlier layer. By tying every layer\u2019s placement\
+    \ to its immediate predecessor, the mapper can place a layer far from the earlier\
+    \ stage that feeds the skip path, forcing the residual addition to travel across\
+    \ the mesh. This directly increases latency for critical data paths.\n\n- **Network\
+    \ congestion and bandwidth ignored**  \n  Only the hop distance (shortest path\
+    \ length) is used. The 10\xD710 mesh has many shared links; placing many communicating\
+    \ pairs on the same shortest\u2011path routes can saturate links, yet the mapper\
+    \ has no notion of load\u2011balancing across the network.\n\n- **No explicit\
+    \ handling of partitioned sub\u2011layer geometry**  \n  When a layer must be\
+    \ split across multiple chiplets, the algorithm allocates portions in the order\
+    \ of nearest\u2011neighbour distance. The resulting set of chiplets is not guaranteed\
+    \ to be compact\u2014sub\u2011layers may be spread in a line or across the mesh,\
+    \ making the all\u2011to\u2011all communication needed for partial\u2011result\
+    \ aggregation far more expensive than a tight cluster.\n\n- **IO corner locations\
+    \ not used**  \n  The first layer\u2019s starting chiplet is chosen solely on\
+    \ maximum memory and performance metric, irrespective of its Manhattan distance\
+    \ to any of the four corner IO tiles. This wastes an opportunity to minimise the\
+    \ initial broadcast latency for the large input activations of ResNet\u201150.\n\
+    \n**2. Specific opportunities for improvement given this configuration**\n\n-\
+    \ **Incorporate activation sizes into placement cost**  \n  The workload file\
+    \ provides `input_activation` per layer. By weighting the distance cost with the\
+    \ activation volume, the mapper can prioritise co\u2011location of heavy\u2011\
+    communicating pairs. This is a direct, low\u2011computational\u2011cost change\
+    \ that can dramatically reduce overall data movement.\n\n- **Add an IO\u2011aware\
+    \ initial placement**  \n  For the very first layer, choose the chiplet that has\
+    \ sufficient capacity and the smallest Manhattan distance to **any** IO corner.\
+    \ This minimises the first\u2011hop latency for loading the massive input activation\
+    \ into the compute mesh.\n\n- **Introduce a lightweight global optimisation pass**\
+    \  \n  Instead of a purely greedy sequential mapping, apply a simple iterative\
+    \ improvement (e.g., simulated annealing or a genetic algorithm) that permutes\
+    \ layer\u2011to\u2011chiplet assignments while respecting capacity. Even a few\
+    \ hundred iterations can escape local minima, especially important for a network\
+    \ with skip\u2011connections where pairwise distances must be optimised globally.\n\
+    \n- **Use the layer graph explicitly**  \n  Build the data\u2011flow graph from\
+    \ the model definition (considering both sequential edges and skip connections).\
+    \ For each layer, define a cost that sums the weighted distances to all its *inputs*\
+    \ (not just the previous layer). This ensures that a layer with a skip connection\
+    \ is placed near both its direct predecessor and the source of the skip.\n\n-\
+    \ **Force compact partitioning geometry**  \n  When a layer must be split, select\
+    \ chiplets that form a contiguous block (e.g., a 2\xD72 square) using a moment\u2011\
+    based clustering of available chips. This reduces the aggregation cost for partial\
+    \ outputs.\n\n- **Balance memory occupancy, not just fill greedy**  \n  Instead\
+    \ of saturating one tile before involving its neighbour, the mapper can aim for\
+    \ a uniform occupancy level (e.g., keep all tiles below 80\u202F% utilisation)\
+    \ so that small, later layers can be co\u2011located with their producers without\
+    \ wasting far\u2011away capacity. This avoids scattering tiny layers across the\
+    \ mesh.\n\n- **Aggressively use the performance metric for load balancing**  \n\
+    \  The chiplet nodes carry a `performance` attribute (active metric). Currently\
+    \ this is only a last\u2011resort tie\u2011breaker. Instead, use it to assign\
+    \ computationally heavy layers to faster tiles, treating it as a cost factor proportional\
+    \ to a layer\u2019s MAC count. This can reduce the cycle count on the critical\
+    \ path.\n\n**3. Data/signals the mapper currently ignores that it should use**\n\
+    \n| Ignored signal | Available in | Why it matters |\n|----------------|--------------|----------------|\n\
+    | Activation tensor size per layer | `layer_info['input_activation']` (model_metrics)\
+    \ | Provides the actual communication volume; placement cost must scale with bytes\
+    \ moved. |\n| Layer connectivity graph (skip/branch edges) | Model definition\
+    \ (workload CSV) | ResNet\u201150\u2019s residuals require that non\u2011consecutive\
+    \ layers be placed closely; ignoring them creates long skip paths. |\n| IO chiplet\
+    \ positions (mesh corners) | `system.chiplet_network` node type/coordinates |\
+    \ Initial and final layers should be near corners to minimise input loading and\
+    \ output collection latency. |\n| Chiplet compute throughput (performance metric)\
+    \ | `chiplet_network` node attribute \u201Cperformance\u201D | Can be used to\
+    \ assign large layers to faster tiles, improving load balance and wall\u2011clock\
+    \ time. |\n| Available bandwidth / link congestion | Not directly available, but\
+    \ can be derived from mesh topology and estimated traffic | Without link\u2011\
+    load awareness, the mapper may create hot\u2011spots that become performance bottlenecks.\
+    \ |\n| Layer execution time estimate | Derived from MAC count and chiplet speed\
+    \ | Enables true workload distribution across the 96 tiles, preventing some tiles\
+    \ from being over\u2011subscribed while others idle. |\n| Memory capacity utilisation\
+    \ distribution | Already partially read, but only for the first layer | Should\
+    \ be used as a soft constraint across all layers to preserve co\u2011location\
+    \ opportunities for small layers. |\n| Partition sub\u2011placement geometry (compactness)\
+    \ | Not considered | Squarish, contiguous sub\u2011clusters reduce partial\u2011\
+    sum communication inside split layers. |"
+  function_name: optimized_mapper_v2
+  improvement_pct:
+    comm_latency: 8.149276827664744
+    compute_latency: -7628.848821081831
+    total_latency: 6.74201579516741
+  iteration: 2
+  metrics:
+    comm_latency: 251527.18
+    compute_latency: 3900.75
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_imc_heavy_optimized_mapper_v2/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 251527.18
+        compute_latency: 3900.75
+        total_latency: 255427.93
+    results_label: resnet50_hetero_imc_heavy_optimized_mapper_v2
+    total_latency: 255427.93
+  outcome: IMPROVED
+- error: "Traceback (most recent call last):\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\", line\
+    \ 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n             \
+    \         ^^^^^^^^^^^^\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 51, in run\n    self._run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 122, in _run_simulation\n    self.gm.run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  function_name: optimized_mapper_v3
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- error: Simulation timed out after 900 seconds.
+  function_name: optimized_mapper_v3
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 2
+- function_name: optimized_mapper_v3
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 3
+- change_summary: "## Analysis of `_nearest_neighbor_mapper_v3` for the Given Configuration\n\
+    \n### 1. Key weaknesses of the current nearest-neighbor approach\n\n1. **Greedy,\
+    \ single-path chain mapping**  \n   Each layer takes its starting chiplet from\
+    \ the previous layer\u2019s dominant tile (the one with the largest percentage).\
+    \ There is no global view; the entire mapping is chained from one first-layer\
+    \ decision. For a deep network like ResNet-50 this forces all layers into a narrow\
+    \ corridor, ignoring that the mesh offers 96 equally capable tiles.\n\n2. **Proximity\u2011\
+    driven memory fill creates hotspots**  \n   The sorting criterion `(distance,\
+    \ -available_memory, -metric)` steers the algorithm to saturate the nearest chiplet\
+    \ first before moving to the next neighbour. This leads to a small set of densely\
+    \ filled chiplets while most of the 96 CMOS tiles remain under\u2011utilised.\
+    \ The resultant clustering causes communication hotspots and leaves far\u2011\
+    away, almost empty tiles for later layers, increasing hop counts.\n\n3. **Complete\
+    \ blindness to inter\u2011layer communication volume**  \n   The mapper never\
+    \ uses `input_activation` \u2013 the size of the tensor that actually travels\
+    \ between layers. Placement decisions treat a 100\u202FKiB activation the same\
+    \ as a 10\u202FMiB one. In a weight\u2011stationary architecture, activation movement\
+    \ dominates latency; ignoring its magnitude makes the mapping insensitive to real\
+    \ performance bottlenecks.\n\n4. **Spatial fragmentation when a layer must be\
+    \ split**  \n   When a layer is partitioned across multiple chiplets (due to capacity\
+    \ constraints), the sub\u2011layers are allocated in nearest\u2011neighbour order\
+    \ along the distance\u2011sorted list. The resulting set of chiplets can be a\
+    \ sprawling string rather than a compact rectangular cluster, increasing the cost\
+    \ of aggregating partial output channels.\n\n5. **Ignorance of residual (skip)\
+    \ connections**  \n   ResNet\u201150\u2019s residual additions mean that layer\
+    \ *N* receives data from both layer *N\u20111* and an earlier layer. The mapper\
+    \ always anchors layer *N* to the primary chiplet of layer *N\u20111*, placing\
+    \ it potentially far from the source of the skip. The extra hop distance for the\
+    \ residual path adds latency directly to the critical forward path.\n\n6. **IO\
+    \ corner chips ignored for first/last layers**  \n   The mesh has four IO chiplets\
+    \ at the corners. The starting chiplet for the very first layer is chosen purely\
+    \ on available memory and `performance` metric; its Manhattan distance to any\
+    \ corner is never considered. This wastes an easy win: placing the first layer\
+    \ near a corner would cut the initial activation broadcast latency.\n\n7. **No\
+    \ network congestion/bandwidth awareness**  \n   Only the static shortest\u2011\
+    path hop count is used. In a 10\xD710 mesh, many shared links can become oversubscribed\
+    \ if multiple heavy\u2011communicating pairs use the same routes. The mapper never\
+    \ estimates link load, so it can create bottlenecks despite short paths.\n\n8.\
+    \ **Memory balance across the mesh is not optimised**  \n   While the mapper uses\
+    \ remaining capacity, it does not enforce a distribution policy. The greedy fill\
+    \ leaves a few tiles near 100% and many near 0%, which prevents co\u2011location\
+    \ of small layers with their producers and forces tiny layers onto far\u2011away\
+    \ empty tiles.\n\n---\n\n### 2. Specific opportunities for improvement given this\
+    \ configuration\n\n| Opportunity | How it leverages the config |\n|-------------|-----------------------------|\n\
+    | **Activation\u2011weighted distance minimization** | Use `input_activation`\
+    \ from the workload to multiply the hop distance when evaluating placement candidates.\
+    \ Heavily communicating pairs will naturally be pulled together, directly reducing\
+    \ the largest data movements. |\n| **IO\u2011aware first\u2011layer selection**\
+    \ | For the first layer, choose the chiplet with sufficient capacity that minimises\
+    \ Manhattan distance to the nearest IO tile. This simple rule cuts input distribution\
+    \ latency with zero added complexity. |\n| **Global optimisation pass (e.g., simulated\
+    \ annealing)** | The 96\u2011node mesh and ResNet\u201150\u2019s ~50 main layers\
+    \ create a search space small enough for a light\u2011weight global optimisation.\
+    \ Iteratively permute layer\u2011to\u2011chiplet assignments while respecting\
+    \ capacity, using a cost function that sums activation\u2011weighted distances\
+    \ for all data edges. |\n| **Layer graph modelling (DAG)** | Construct the full\
+    \ data\u2011flow graph including skip connections. For each layer, sum the weighted\
+    \ distances to **all** its input sources; this ensures layers with residual inputs\
+    \ are placed near both predecessor and skip source. |\n| **Compact sub\u2011layer\
+    \ clustering** | When a layer must be split, select a set of chiplets that form\
+    \ a contiguous block (e.g., 2\xD72 square) by applying a simple greedy cluster\
+    \ algorithm on the set of available tiles. This cuts aggregation communication\
+    \ dramatically. |\n| **Softer memory\u2011fill policy** | Instead of filling one\
+    \ chiplet to 100%, stop at a threshold (e.g., 80%) and spill to the next neighbour.\
+    \ This preserves space for future small layers to co\u2011locate, avoiding scattering.\
+    \ |\n| **Performance\u2011metric\u2011driven load balancing** | Exploit the `performance`\
+    \ node attribute more aggressively: weight MAC counts by the chiplet\u2019s metric\
+    \ to distribute heavy layers onto faster tiles, using it as a primary sorting\
+    \ key rather than only a tie\u2011breaker. |\n| **Link\u2011congestion estimates\
+    \ via greedy deflection** | While not directly available, the mapper can estimate\
+    \ per\u2011link load by summing activation sizes crossing each edge. A simple\
+    \ penalty for routes that exceed a threshold can be added to move traffic off\
+    \ hot links. |\n\n---\n\n### 3. Data/signals the mapper currently ignores that\
+    \ it should use\n\n| Ignored signal | Available from | Why critical |\n|----------------|----------------|--------------|\n\
+    | `input_activation` size | `layer_info['input_activation']` in `model_metrics`\
+    \ | Determines actual communication volume; must be the primary weight in any\
+    \ distance cost to minimise total data movement. |\n| Full layer connectivity\
+    \ (skip edges) | Workload CSV / model definition graph | Residual connections\
+    \ create non\u2011sequential dependencies; ignoring them creates long\u2011hop\
+    \ residual paths that directly increase latency. |\n| IO chiplet coordinates (corners)\
+    \ | `system.chiplet_network` node types | First and last layers should be near\
+    \ corners to minimise the initial input and final output transfer latency. |\n\
+    | Chiplet compute throughput metric | `chiplet_network` node attribute `performance`\
+    \ | Can be used to assign heavy layers to faster tiles, better load distribution,\
+    \ and lower wall\u2011clock time. |\n| Per\u2011link load / congestion | Can be\
+    \ derived by accumulating activation sizes on shortest paths | Avoids creating\
+    \ oversubscribed mesh routes, a primary source of contention in a 10\xD710 regular\
+    \ topology. |\n| Memory occupancy distribution (variance) | Already read but only\
+    \ for selection, not for balancing | Should be used as a soft constraint to preserve\
+    \ co\u2011location room and avoid extreme variance that forces tiny layers far\
+    \ away. |\n| Sub\u2011layer placement geometry | Not considered | When splitting\
+    \ a layer, the resulting set of chiplets should be forced into a compact cluster;\
+    \ otherwise partial\u2011sum communication cost explodes. |\n| Layer execution\
+    \ time estimate | Derived from MAC count and per\u2011chiplet speed | Enables\
+    \ true workload\u2011level load balancing across all 96 tiles, preventing any\
+    \ single chiplet from becoming the bottleneck. |\n\n---\n\n### A different optimisation\
+    \ strategy (recommendation)\n\nInstead of incrementally tweaking the nearest\u2011\
+    neighbor heuristic, adopt a **two\u2011phase global\u2011optimisation approach**:\n\
+    \n1. **Seeded initial placement**  \n   - Place the first layer at the chiplet\
+    \ with sufficient memory that is closest to an IO corner.  \n   - Propagate through\
+    \ the layer graph (including skip edges) using a greedy placement that minimises\
+    \ the sum of activation\u2011weighted distances to *all* feeding layers, while\
+    \ respecting capacity.  \n   - Explicitly enforce that split layers occupy compact\
+    \ tile clusters (via a simple breadth\u2011first traversal from the starting chiplet).\n\
+    \n2. **Iterative improvement via fast simulated annealing**  \n   - Define a cost\
+    \ function:  \n     `cost = \u03A3_{edge (u\u2192v)} (activation_size * hop_distance)\
+    \ + \u03BB * memory_imbalance_penalty + \u03BC * congestion_penalty`  \n   - In\
+    \ each iteration, randomly swap two layers (or move a layer to a free chiplet)\
+    \ if capacity allows.  \n   - Accept moves that reduce cost with high probability,\
+    \ and occasionally accept worse moves to escape local minima.  \n   - Use the\
+    \ chiplet\u2019s `performance` metric to bias swaps that move heavy layers onto\
+    \ faster tiles.\n\nThis strategy directly addresses all identified weaknesses,\
+    \ is feasible within the configuration (96 tiles), and differs from the simple\
+    \ \u201Cchain and fill\u201D method attempted in previous iterations. It can dramatically\
+    \ reduce activation movement and balance both memory and network load."
+  function_name: optimized_mapper_v3
+  improvement_pct:
+    comm_latency: -26.15142798381439
+    compute_latency: -4397.305329898951
+    total_latency: -26.95690192443132
+  iteration: 3
+  metrics:
+    comm_latency: 345457.41
+    compute_latency: 2269.79
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_imc_heavy_optimized_mapper_v3/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 345457.41
+        compute_latency: 2269.79
+        total_latency: 347727.21
+    results_label: resnet50_hetero_imc_heavy_optimized_mapper_v3
+    total_latency: 347727.21
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

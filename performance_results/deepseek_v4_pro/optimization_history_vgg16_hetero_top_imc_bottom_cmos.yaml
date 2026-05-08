@@ -1,0 +1,456 @@
+baseline_metrics:
+  comm_latency: 296241.43
+  compute_latency: 242.71
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_top_imc_bottom_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296484.14
+best_metrics:
+  comm_latency: 296241.43
+  compute_latency: 242.71
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_top_imc_bottom_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296484.14
+config: vgg16_hetero_top_imc_bottom_cmos
+history:
+- function_name: improved_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "## Analysis of `_nearest_neighbor_mapper_v3` for the Given Config\n\
+    \n### 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\n**a) Greedy,\
+    \ single-anchor nearest-neighbour packing**  \nFor every layer after the first,\
+    \ the mapper chooses the chiplet that received the largest share of the *previous*\
+    \ layer as the \u201Canchor\u201D and then allocates capacity purely by increasing\
+    \ hop distance from that single anchor. This ignores the fact that the previous\
+    \ layer\u2019s output activations are distributed across *many* chiplets (according\
+    \ to that layer\u2019s percentage split). Communicating activations from all those\
+    \ source chiplets to the new layer\u2019s destination chiplets now incurs a weighted\
+    \ sum of distances \u2013 the algorithm never computes nor minimises this cost.\n\
+    \n**b) No global load\u2011balancing or fragmentation avoidance**  \nThe algorithm\
+    \ fills chiplets in strict distance order (closest first, then outward rings).\
+    \ Once a chiplet is completely filled, the next\u2011closest is used. This leads\
+    \ naturally to a \u201Cblob\u201D of densely packed weights near the starting\
+    \ anchor while more distant chiplets remain empty. Later layers that are large\
+    \ may then need to use far\u2011away chiplets, creating an unnecessarily scattered\
+    \ layout and poor inter\u2011layer locality. In extreme cases, the greedy packing\
+    \ could even fail to map a model despite sufficient total capacity because the\
+    \ filled\u2011up local region cannot accommodate a subsequent large layer (though\
+    \ in this config with 96 large CMOS chiplets, total capacity is unlikely to be\
+    \ the bottleneck, but fragmentation still hurts communication efficiency).\n\n\
+    **c) Blind to I/O placement**  \nThe 10\xD710 mesh has four I/O chiplets at the\
+    \ corners. When mapping a network like VGG16, input activations must enter from\
+    \ an I/O and final results must be sent to an I/O. The current mapper:\n* For\
+    \ the first layer, selects the starting chiplet based solely on available memory\
+    \ and a static \u201Cperformance\u201D metric \u2013 it never considers proximity\
+    \ to any I/O.\n* For the last layer, it again only cares about where the previous\
+    \ layer\u2019s maximum\u2011share chiplet is, ignoring the cost of sending results\
+    \ back to an I/O.\nThis can add unnecessary hops to the critical data\u2011injection\
+    \ and result\u2011collection phases.\n\n**d) Over\u2011simplified \u201Cfailure\u201D\
+    \ tolerance**  \nThe mapper declares a mapping failure if `resources_remaining\
+    \ - 10 > 0`, using a magic number 10 as a tolerance for rounding errors. The origin\
+    \ of 10 is unclear; it may reject valid mappings that could be completed with\
+    \ a small over\u2011allocation or accept mappings that are actually slightly infeasible.\
+    \ A proper, config\u2011aware tolerance (e.g., a fraction of one chiplet\u2019\
+    s capacity unit) would be safer.\n\n**e) Ignores layer\u2011type driven communication\
+    \ volume**  \nConvolutional layers have far larger activation volumes than fully\u2011\
+    connected layers, making the distance between successive conv layers much more\
+    \ performance\u2011critical. The mapper treats all layers identically, so it may\
+    \ waste large distances on early, high\u2011volume conv layers while later, low\u2011\
+    volume FC layers get preferential close placement.\n\n**f) Static, pre\u2011computed\
+    \ shortest\u2011path lookup used only as scalar distance**  \nThe mapper uses\
+    \ a simple hop\u2011count distance without considering the actual network topology\u2019\
+    s bandwidth, routing congestion, or the fact that multiple concurrent flows (if\
+    \ pipelining were used, though here `non\u2011pipelined` mode is set) would contend.\
+    \ Even in the non\u2011pipelined case, a more careful distance model (e.g., Manhattan\
+    \ distance on a mesh) is already captured by hop count, but the mapper does not\
+    \ exploit the regular grid to bias placement toward the center or to avoid edges.\n\
+    \n### 2. Specific Opportunities for Improvement Given This Config\n\n**a) Multi\u2011\
+    source aware starting\u2011chiplet selection**  \nInstead of using only the previous\
+    \ layer\u2019s maximum\u2011share chiplet, compute the **weighted centroid** (by\
+    \ percentage) of all source chiplets. Choose the starting chiplet for the new\
+    \ layer that minimises the **total communication cost** for the previous layer\u2019\
+    s activations, i.e., `argmin_{c} \u03A3_{s} (ps * dist(s, c))` where `ps` is the\
+    \ percentage of the previous layer on source `s`. This directly reduces inter\u2011\
+    layer activation movement.\n\n**b) I/O\u2011aware first/last layer placement**\
+    \  \n* For the first layer, bias the starting chiplet toward the nearest I/O that\
+    \ will inject input data.  \n* For the final output layer, ensure the layer\u2019\
+    s mapped chiplets are close to an I/O (or prefer the I/O\u2011adjacent corner\
+    \ chiplet as the anchor).  \nOn the 10\xD710 mesh with corner I/Os, this can cut\
+    \ several hops from the critical path.\n\n**c) Global compaction and load balancing\
+    \ heuristic**  \nAfter selecting a per\u2011layer anchor, rather than a pure distance\u2011\
+    ordered fill, use a **bounded expansion** that spreads the layer only to chiplets\
+    \ that are not yet heavily occupied, while still respecting a distance budget.\
+    \ For example, prefer chiplets within `K` hops that have high free capacity, and\
+    \ only expand beyond `K` when necessary. This creates a more balanced \u201Cfootprint\u201D\
+    \ over the mesh and reduces later hot\u2011spot formation.\n\n**d) Topology\u2011\
+    aware spatial packing**  \nThe 10\xD710 mesh is a regular grid. Instead of ordering\
+    \ candidates by generic shortest\u2011path distance, one could use a **Moore\u2011\
+    neighbourhood expansion** (i.e., expanding outward in Manhattan rings) to create\
+    \ compact, rectangular\u2011like clusters that map better to the underlying mesh\
+    \ routing. This naturally preserves locality and can reduce average distance.\n\
+    \n**e) Communication\u2011cost\u2011driven layer splitting**  \nCurrently the\
+    \ partitioner splits layers along output channels *after* the mapper has assigned\
+    \ percentages. The mapper could be extended to **explicitly minimise** the post\u2011\
+    mapping communication cost for the *current* layer\u2019s output partitions to\
+    \ the *next* layer\u2019s chips. This would turn the problem into a mini\u2011\
+    assignment that could be solved with a simple greedy or Hungarian\u2011like algorithm,\
+    \ given that the next layer\u2019s placement is also being determined.\n\n**f)\
+    \ Remove magic tolerance**  \nReplace the hard\u2011coded `10` with a dynamic\
+    \ tolerance based on the smallest capacity unit of a chiplet (e.g., 1% of `chiplet.get_capacity_unit_size()`).\
+    \ This prevents false failures and makes the mapper more robust to any chiplet\
+    \ size.\n\n### 3. Data/Signals the Mapper Currently Ignores That It Should Use\n\
+    \n| **Ignored data/signal** | **How it should be used** |\n|--------------------------|---------------------------|\n\
+    | **I/O chiplet coordinates** | Prioritise proximity to the input I/O for the\
+    \ first layer and to an output I/O for the final layer(s). |\n| **Previous layer\u2019\
+    s full percentage distribution** (list of (chiplet, %)) | Compute a weighted communication\
+    \ cost to all source chiplets when choosing the anchor for the next layer, not\
+    \ just the maximum\u2011share chiplet. |\n| **Activation volume per layer** (e.g.,\
+    \ output feature\u2011map size \xD7 bits_per_activation) | Weight the importance\
+    \ of locality by the number of bits that must be communicated; give higher priority\
+    \ to shortening distances for layers with large activation volumes (conv layers).\
+    \ |\n| **Layer type (conv/FC/attention)** | Conv layers have spatial locality\
+    \ in their output channels; placing them close together helps. FC layers are smaller;\
+    \ they can be placed farther apart. Use a type\u2011dependent distance budget.\
+    \ |\n| **Chiplet occupancy / fragmentation state** | Even for CMOS chiplets (units\
+    \ = weights), the current allocation ignores fragmentation. Monitoring the *number\
+    \ of weight units left* vs. *available capacity* could guide how aggressively\
+    \ to fill a chiplet vs. spreading across multiple lightly\u2011filled chiplets\
+    \ to avoid later \u201Cfull\u2011chiplet\u201D bottlenecks. |\n| **Network topology\
+    \ regularity** (grid coordinates) | Instead of generic shortest\u2011path distances,\
+    \ exploit the mesh\u2019s Manhattan geometry to impose a preferred expansion direction\
+    \ (e.g., keep the mapped set convex) and avoid edge\u2011of\u2011mesh chiplets\
+    \ that have fewer neighbours. |\n| **Capacity\u2011unit granularity (weight unit\
+    \ size)** | Use `get_capacity_unit_size()` when setting tolerance for failure;\
+    \ the magic number 10 ignores that different chiplet types may have very different\
+    \ unit sizes (here it\u2019s 1 weight). The tolerance should scale accordingly.\
+    \ |\n| **Performance metric value** | Currently used only as a secondary tie\u2011\
+    breaker when selecting the first\u2011layer anchor. It could be used more actively:\
+    \ e.g., prefer chiplets with higher compute capability (if heterogeneous) to handle\
+    \ the largest percentage of compute\u2011heavy layers. |\n| **Weight\u2011loading\
+    \ strategy (all\u2011at\u2011once)** | While not critical during runtime, the\
+    \ one\u2011time weight\u2011loading phase could benefit from proximity to the\
+    \ I/O that streams weights. The mapper could place the most weight\u2011heavy\
+    \ layers close to an I/O to reduce initial loading time, but this is a secondary\
+    \ optimisation. |\n| **Communication mode (non\u2011pipelined)** | In non\u2011\
+    pipelined mode, layers execute sequentially with no overlap. Therefore **all**\
+    \ source\u2011destination communications happen sequentially; the total execution\
+    \ time is dominated by the slowest transfer. The mapper could explicitly minimise\
+    \ the **maximum** inter\u2011chiplet distance across all layer boundaries (minimax)\
+    \ rather than just the nearest\u2011neighbour cost. |\n\n**Summary**  \nThe current\
+    \ mapper is a simple, single\u2011anchor nearest\u2011neighbour packer that completely\
+    \ ignores I/O placement, multi\u2011source inter\u2011layer communication, activation\
+    \ volume, and global load balancing. For the given 10\xD710 mesh with 96 homogeneous\
+    \ CMOS chiplets and a weight\u2011stationary VGG16 workload, these deficiencies\
+    \ can lead to unnecessarily long inter\u2011layer communication paths, especially\
+    \ for early high\u2011volume conv layers and for the final I/O interactions. Addressing\
+    \ the gaps above\u2014particularly incorporating all source chiplet distances,\
+    \ I/O proximity, and a load\u2011balancing expansion policy\u2014would significantly\
+    \ reduce communication latency and improve overall simulation performance."
+  function_name: improved_mapper
+  improvement_pct:
+    comm_latency: -0.2978111468068429
+    compute_latency: 1.2525235878208645
+    total_latency: -0.2965420005265751
+  iteration: 1
+  metrics:
+    comm_latency: 297123.67
+    compute_latency: 239.67
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_top_imc_bottom_cmos_improved_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 297123.67
+        compute_latency: 239.67
+        total_latency: 297363.34
+    results_label: vgg16_hetero_top_imc_bottom_cmos_improved_mapper
+    total_latency: 297363.34
+  outcome: NO_IMPROVEMENT
+- function_name: improved_mapper_v2
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "### 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\
+    \n**a) Single-anchor, greedy hop-distance packing**  \nAfter the first layer,\
+    \ the mapper selects the chiplet that received the largest share of the *previous*\
+    \ layer as the \u201Canchor,\u201D then allocates the new layer\u2019s capacity\
+    \ in increasing hop distance from that anchor. This entirely ignores the fact\
+    \ that the previous layer\u2019s output activations are spread across **multiple**\
+    \ chiplets according to its own distribution. The resulting total inter\u2011\
+    layer communication cost is proportional to the *weighted* distance over all source\
+    \ chiplets, not just the single anchor, yet the mapper never computes or minimises\
+    \ this true cost.\n\n**b) Unbalanced fill creating fragmentation and scattered\
+    \ footprints**  \nThe mapper fills chiplets strictly in order of proximity to\
+    \ the anchor (closest first, then outward rings). This creates dense \u201Cblobs\u201D\
+    \ of allocated weights near the anchor while more distant chiplets remain largely\
+    \ empty. Later layers, especially large ones, are forced to either pack tightly\
+    \ into whatever local space remains or scatter far away when the local region\
+    \ is exhausted. The resulting mapping exhibits poor locality between successive\
+    \ layers and may unnecessarily increase average hop counts.\n\n**c) Completely\
+    \ blind to I/O placement**  \nThe 10\xD710 mesh has four I/O chiplets at the corners.\
+    \ The first layer\u2019s anchor is chosen based solely on available memory and\
+    \ a secondary tie\u2011breaker metric; no consideration is given to the I/O that\
+    \ will inject input data. The last layer(s) are placed near the previous layer\u2019\
+    s maximum\u2011share chiplet, ignoring the distance needed to send final results\
+    \ back to an I/O. This adds avoidable hops to the critical data\u2011ingress and\
+    \ result\u2011egress phases.\n\n**d) Magic\u2011number tolerance for mapping failure**\
+    \  \nThe condition `resources_remaining - 10 > 0` uses a fixed threshold of 10\
+    \ crossbar/weight units to declare failure. The origin of 10 is arbitrary and\
+    \ unrelated to the actual capacity\u2011unit granularity (here 1 weight unit for\
+    \ CMOS). This can cause spurious rejections of feasible mappings or acceptance\
+    \ of slightly infeasible ones, undermining reliability.\n\n**e) Equal treatment\
+    \ of layers with vastly different communication volumes**  \nConvolutional layers\
+    \ in VGG16 produce far larger activation volumes than fully\u2011connected layers\
+    \ do. The mapper, however, applies the same placement logic to every layer, so\
+    \ high\u2011volume conv\u2011to\u2011conv transitions may receive no better locality\
+    \ than low\u2011volume FC\u2011to\u2011FC ones, wasting communication energy and\
+    \ latency on the most expensive transfers.\n\n**f) Static shortest\u2011path distances\
+    \ without topology exploitation**  \nThe mapper uses generic all\u2011pairs shortest\u2011\
+    path lengths. While hop count on a mesh is already Manhattan distance, the algorithm\
+    \ never exploits the regular grid geometry to prefer convex, centrally located\
+    \ clusters or to avoid edge\u2011of\u2011mesh chiplets that have fewer neighbours\
+    \ and therefore higher average distances for future expansions.\n\n### 2. Specific\
+    \ Opportunities for Improvement Given This Config\n\n**a) Multi\u2011source communication\u2011\
+    cost minimisation**  \nInstead of using only the previous layer\u2019s maximum\u2011\
+    share chiplet, compute the **weighted centroid** of all source chiplets. For each\
+    \ candidate anchor chiplet `c`, compute the total communication cost `\u03A3_s\
+    \ (pct_s \xD7 dist(s, c))`, where `pct_s` is the previous layer\u2019s percentage\
+    \ on source `s`. Choose the anchor that minimises this cost, then perform bounded\
+    \ expansion from there. This directly reduces the dominant inter\u2011layer activation\
+    \ movement.\n\n**b) I/O\u2011aware first\u2011 and last\u2011layer placement**\
+    \  \n- First layer: bias the anchor selection toward the nearest I/O chiplet(s)\
+    \ that will provide the input activation stream (e.g., the closest corner).  \n\
+    - Last output layer: similarly bias the mapping to ensure the aggregated result\
+    \ is close to at least one I/O.  \nFor a 10\xD710 mesh, this can save several\
+    \ hops on the critical path, which is particularly impactful in the non\u2011\
+    pipelined execution mode where total latency is dominated by the slowest link.\n\
+    \n**c) Load\u2011balanced, bounded\u2011expansion packing**  \nRather than a pure\
+    \ distance\u2011ordered fill, use a **capacity\u2011balanced expansion** within\
+    \ a configurable hop\u2011radius. Prefer chiplets that have high free capacity\
+    \ within the radius, and only expand beyond the radius when necessary. This prevents\
+    \ early over\u2011consolidation, leaves nearby capacity available for later layers,\
+    \ and yields more uniform chiplet utilisation, ultimately reducing fragmentation\
+    \ and long\u2011range communication.\n\n**d) Regular\u2011grid spatial compaction\
+    \ (Moore\u2011neighbourhood)**  \nExploit the mesh topology explicitly: begin\
+    \ expansion from the selected anchor using **Manhattan\u2011distance concentric\
+    \ rings** (Moore neighbourhood). Prefer placing the entire layer within a compact\
+    \ rectangle or convex cluster. This inherent regularity maps naturally to physical\
+    \ mesh routing and minimises internal hop distances within the layer\u2019s footprint.\n\
+    \n**e) Communication\u2011cost\u2011aware layer partitioning linkage**  \nCurrently\
+    \ the layer partitioner splits output channels *after* the mapper has fixed the\
+    \ percentages. A future improvement could feed back estimated next\u2011layer\
+    \ placement to guide the current layer\u2019s distribution, effectively solving\
+    \ a mini\u2011assignment problem that minimises total communication for the produced\
+    \ activations to the next layer\u2019s destination chiplets.\n\n**f) Remove magic\
+    \ tolerance**  \nReplace the hard\u2011coded `10` with a dynamic tolerance equal\
+    \ to, for example, `0.01 \xD7 chiplet.get_capacity_unit_size()` (or some small\
+    \ fraction of the unit). This makes the failure check scale with the actual capacity\
+    \ granularity, preventing false positives/negatives.\n\n### 3. Data/Signals the\
+    \ Mapper Currently Ignores That It Should Use\n\n| **Ignored data/signal**   \
+    \                | **How it should be used** |\n|--------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|\n\
+    | **I/O chiplet coordinates and identity**  | Prioritise proximity to the input\
+    \ I/O for the first layer and to an output I/O for the final layer(s), reducing\
+    \ critical ingress/egress latency.                     |\n| **Previous layer\u2019\
+    s full percentage distribution** | Compute a weighted communication cost to all\
+    \ source chiplets, not just the single max\u2011share chiplet, when selecting\
+    \ the anchor for the next layer.            |\n| **Activation volume per layer**\
+    \ (e.g., output feature map size \xD7 bits_per_activation) | Weight the locality\
+    \ importance by the number of bits that must traverse the network; give higher\
+    \ priority to minimising distance for layers with large output activations (mostly\
+    \ early conv layers). |\n| **Layer type (conv vs. FC vs. attention)** | Use a\
+    \ type\u2011dependent distance budget; conv layers, which generate dense activations,\
+    \ should be packed more tightly together, while smaller FC layers can tolerate\
+    \ greater distances. |\n| **Chiplet occupancy / fragmentation state** | Track\
+    \ not only how many capacity units remain but also how fragmented the free space\
+    \ is. Prefer spreading a layer across multiple lightly\u2011filled chiplets to\
+    \ avoid later \u201Cfull\u2011chiplet\u201D bottlenecks. |\n| **Network topology\
+    \ regularity (grid coordinates)** | Exploit the mesh\u2019s Manhattan geometry\
+    \ to create convex, centrally\u2011located clusters and to penalise edge\u2011\
+    of\u2011mesh chiplets that have fewer neighbours and thus higher expansion costs.\
+    \ |\n| **Capacity\u2011unit granularity (weight unit size)** | Use `get_capacity_unit_size()`\
+    \ to set the failure tolerance accurately; the current magic number 10 assumes\
+    \ a fixed unit that may not hold for all chiplet types. |\n| **Performance metric\
+    \ value**              | Currently used only as a secondary tie\u2011breaker;\
+    \ it could steer the largest percentage of compute\u2011heavy layers toward higher\u2011\
+    performance chiplets if the system were heterogeneous. |\n| **Weight\u2011loading\
+    \ strategy (`all_at_once`)** | While not runtime\u2011critical, loading all weights\
+    \ at start-up benefits from placing weight\u2011heavy layers close to the I/O\
+    \ that supplies the weights, reducing initialisation time. |\n| **Communication\
+    \ mode (`non\u2011pipelined`)**  | In non\u2011pipelined mode, layers execute\
+    \ sequentially with no overlap; total execution time is dictated by the *maximum*\
+    \ inter\u2011chiplet distance. The mapper should explicitly minimise the worst\u2011\
+    case (minimax) distance across all layer boundaries. |\n\nBy addressing these\
+    \ ignored signals and moving beyond a single\u2011anchor greedy fill, the next\
+    \ iteration of the mapper can significantly reduce the measured latency and produce\
+    \ a more efficient, scalable mapping for this 10\xD710 CMOS\u2011dominated mesh\
+    \ running VGG16."
+  function_name: improved_mapper_v2
+  improvement_pct:
+    comm_latency: 3.8338999376285674
+    compute_latency: -5858.9221704915335
+    total_latency: -0.9655153897945357
+  iteration: 2
+  metrics:
+    comm_latency: 284883.83
+    compute_latency: 14462.9
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_top_imc_bottom_cmos_improved_mapper_v2/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 284883.83
+        compute_latency: 14462.9
+        total_latency: 299346.74
+    results_label: vgg16_hetero_top_imc_bottom_cmos_improved_mapper_v2
+    total_latency: 299346.74
+  outcome: NO_IMPROVEMENT
+- error: "Traceback (most recent call last):\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\", line\
+    \ 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n             \
+    \         ^^^^^^^^^^^^\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 51, in run\n    self._run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 122, in _run_simulation\n    self.gm.run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  function_name: optimized_mapper_v3
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- function_name: pipeline_mapper_v3
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 2
+- change_summary: "**Mapping Weakness Analysis & New Optimization Strategy**  \n*Based\
+    \ on the provided config (10\xD710 mesh, 96 CMOS chiplets, VGG16, non\u2011pipelined\
+    \ execution)*\n\n---\n\n### 1. Key weaknesses of the current nearest\u2011neighbor\
+    \ approach (relevant to this config)\n\n- **Single\u2011anchor greediness**: Only\
+    \ the maximum\u2011share chiplet of the previous layer dictates the next layer\u2019\
+    s placement; the weighted communication cost to all source chiplets is ignored.\
+    \  \n- **Unconstrained blob expansion**: Chiplets are filled in strict hop\u2011\
+    distance order, creating dense, early\u2011filled clusters that later starve nearby\
+    \ chiplets for subsequent large layers \u2013 this forces those layers to scatter\
+    \ far away.  \n- **I/O blindness**: The first layer chooses its anchor solely\
+    \ by available memory, never considering proximity to an injection I/O. The last\
+    \ layer(s) are placed near the previous layer\u2019s max chip, ignoring distance\
+    \ to an egress I/O.  \n- **Magic\u2011number failure tolerance**: The `resources_remaining\
+    \ \u2013 10 > 0` check uses a hard\u2011coded tolerance unrelated to the chiplet\u2019\
+    s weight\u2011unit granularity.  \n- **Uniform treatment of layers**: High\u2011\
+    volume convolutional activations are not given priority over low\u2011volume FC\
+    \ connections.  \n- **Topology under\u2011utilization**: The regular mesh geometry\
+    \ is not exploited to create compact, convex clusters; edge chiplets are not de\u2011\
+    prioritised.  \n\n---\n\n### 2. Specific improvement opportunities given this\
+    \ config\n\n- **Weighted multi\u2011source anchor selection**: Replace the single\u2011\
+    max anchor with the chiplet that minimises \u03A3 (source_% \xD7 hop_distance)\
+    \ across all source chiplets of the previous layer.  \n- **I/O\u2011aware first\
+    \ & last layer placement**: For the first layer, bias the anchor toward the nearest\
+    \ injection I/O. For the final output layer, similarly force placement close to\
+    \ any I/O.  \n- **Bounded\u2011expansion packing with capacity balancing**: After\
+    \ choosing an anchor, expand only within a distance budget while preferring chiplets\
+    \ with high remaining capacity; this prevents early over\u2011consolidation and\
+    \ maintains free space for later layers.  \n- **Exploit Manhattan geometry**:\
+    \ Use Moore\u2011neighbourhood rings to build rectangular, contiguous footprints\
+    \ that map well to the mesh.  \n- **Activation\u2011volume weighting**: Scale\
+    \ the \u201Clocality importance\u201D of each inter\u2011layer edge by the size\
+    \ of its activation tensor (feature map size \xD7 bits_per_activation), giving\
+    \ higher priority to keeping conv\u2011to\u2011conv transitions close.  \n- **Replace\
+    \ magic tolerance**: Use a failure threshold based on a small fraction of the\
+    \ chiplet\u2019s capacity\u2011unit size (e.g., `0.01 * chiplet.get_capacity_unit_size()`).\
+    \  \n\n---\n\n### 3. Critical data/signals the mapper currently ignores\n\n| **Ignored\
+    \ signal**                        | **Why it matters**                       \
+    \                                                                            \
+    \                                   |\n|-------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|\n\
+    | I/O chiplet coordinates                   | Input and output data must traverse\
+    \ the distance to an I/O; placing first/last layers nearby cuts critical latency.\
+    \                                      |\n| Full source distribution of previous\
+    \ layer | The real communication cost is a weighted sum over all source chiplets,\
+    \ not just the one with the largest share.                                   \
+    \      |\n| Activation volume per layer               | Conv layers generate huge\
+    \ data movement; minimising their inter\u2011layer hop distance yields disproportionate\
+    \ latency benefits.                             |\n| Layer type (conv vs. FC)\
+    \                  | Conv layers should be packed tighter; FC layers, which are\
+    \ smaller and generate less data, can tolerate larger distances.             \
+    \                  |\n| Chiplet occupancy balance / fragmentation | A highly unbalanced\
+    \ fill leads to early exhaustion of a local region, forcing later large layers\
+    \ to map far away.                                        |\n| Grid regularity\
+    \ (2D coordinates)          | Exploiting Manhattan distances and avoiding edge\
+    \ chips (fewer neighbours) can create more compact and communication\u2011friendly\
+    \ clusters.                  |\n| Capacity\u2011unit granularity (weight\u2011\
+    unit size) | The failure tolerance must scale with the actual unit size to avoid\
+    \ spurious failures.                                                         \
+    \        |\n| Non\u2011pipelined execution mode              | In this mode, the\
+    \ slowest inter\u2011layer transfer dominates total latency; the mapper should\
+    \ minimise the *maximum* hop distance across layer boundaries.   |\n\n---\n\n\
+    ### New Optimization Strategy (Different from Previous Attempts)\n\nThe two previous\
+    \ attempts (based on the analysis excerpts) likely incorporated multi\u2011source\
+    \ anchor selection and I/O awareness but still suffered from the fundamental \u201C\
+    blob\u201D expansion that fragments capacity and forces later layers apart. Because\
+    \ those refinements yielded *no latency improvement*, a **more radical placement\
+    \ paradigm** is needed.\n\n**Proposed strategy: Linear Pipeline Placement along\
+    \ a Hamiltonian Path from Input I/O to Output I/O**\n\n*Concept*: Instead of letting\
+    \ each layer freely choose its anchor from the previous layer\u2019s maximum\u2011\
+    share chiplet, we pre\u2011define a **total chip ordering** that forms a spatial\
+    \ pipeline through the mesh, starting near the injection I/O and ending near an\
+    \ egress I/O. All layers are then **mapped sequentially** along this path, ensuring\
+    \ that every layer\u2019s weight\u2011holding chiplets are **physically adjacent\
+    \ (or overlapping) in the pipeline order**. This guarantees that data always flows\
+    \ forward with minimal hop distance (ideally 1\u20132 hops) and completely avoids\
+    \ the fragmentation\u2011induced scatter.\n\n**Key implementation steps**:\n1.\
+    \ **Compute a Hamiltonian path** (or a space\u2011filling curve, such as a snake\
+    \ scan) that visits every compute chiplet exactly once, while keeping the start\
+    \ point close to the injection I/O and the end point close to an output I/O. For\
+    \ a 10\xD710 mesh with I/Os at the four corners, a simple row\u2011major snake\
+    \ scan from the top\u2011left corner (C1) to the bottom\u2011right corner (C100)\
+    \ works well, as it passes near two I/Os.\n\n2. **Assign each layer\u2019s weight\
+    \ units sequentially** along this path. Maintain a pointer `current_chiplet` and\
+    \ allocate the required weight units for layer *i* starting from that chiplet,\
+    \ moving forward through the ordered list. If a chiplet does not have enough remaining\
+    \ capacity, the layer \u201Cspills\u201D to the next chiplets in the path. This\
+    \ ensures that all weight storage for a layer resides in a contiguous segment\
+    \ of the path.\n\n3. **Inter\u2011layer locality**: Because successive layers\
+    \ are placed in adjacent (or overlapping) path segments, the hop distance between\
+    \ the source chiplets of layer *i* and the destination chiplets of layer *i+1*\
+    \ is limited to at most the length of the overlapping segment or the gap between\
+    \ the tail of *i* and the head of *i+1* \u2013 typically 0\u20112 hops. This directly\
+    \ minimises the average and maximum communication distances.\n\n4. **Handle varying\
+    \ layer sizes**: The path is long enough (96 chiplets) to accommodate all VGG16\
+    \ layers, even the huge FC layers, because chiplets can hold weights from multiple\
+    \ overlapping layers. If a layer is very large, it simply spans many consecutive\
+    \ chiplets; the next layer begins immediately after the previous one finishes,\
+    \ so the pipeline advances naturally.\n\n5. **First/last layer alignment**: The\
+    \ first layer\u2019s start is intentionally set to the chiplet nearest the injection\
+    \ I/O; the final layer\u2019s tail ends near an egress I/O. This removes the need\
+    \ for I/O\u2011specific anchor heuristics.\n\n**Why this is different**: Previous\
+    \ attempts enhanced the existing greedy anchor\u2011based approach, but they could\
+    \ not overcome the fundamental tendency to create dense local blobs and then fragment\
+    \ the rest. The pipeline strategy enforces **global spatial contiguity and monotonic\
+    \ progression** from input to output, a property that the greedy method cannot\
+    \ guarantee. It trades some packing flexibility (which in this over\u2011provisioned\
+    \ mesh is not a bottleneck) for **hard locality guarantees**, which directly attack\
+    \ the root cause of high communication latency.\n\n**Expected impact**: With non\u2011\
+    pipelined execution, the total runtime is dominated by the slowest inter\u2011\
+    layer communication. By bounding that distance to \u22642 hops for every layer\
+    \ transition, the overall latency should drop substantially, even if some weight\u2011\
+    loading overhead increases slightly (which is one\u2011time and therefore negligible\
+    \ in steady\u2011state inference). This strategy is simple to implement, deterministically\
+    \ hierarchical, and completely side\u2011steps the fragmentation problems of the\
+    \ nearest\u2011neighbor approach."
+  function_name: pipeline_mapper_v3
+  improvement_pct:
+    comm_latency: -0.29964748684881554
+    compute_latency: 2.2537184294013426
+    total_latency: -0.2975572318977881
+  iteration: 3
+  metrics:
+    comm_latency: 297129.11
+    compute_latency: 237.24
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_top_imc_bottom_cmos_pipeline_mapper_v3/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 297129.11
+        compute_latency: 237.24
+        total_latency: 297366.35
+    results_label: vgg16_hetero_top_imc_bottom_cmos_pipeline_mapper_v3
+    total_latency: 297366.35
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

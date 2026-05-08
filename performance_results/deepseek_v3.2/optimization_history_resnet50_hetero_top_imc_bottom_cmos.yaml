@@ -1,0 +1,486 @@
+baseline_metrics:
+  comm_latency: 273843.44
+  compute_latency: 50.47
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/resnet50_hetero_top_imc_bottom_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 273893.9
+best_metrics:
+  comm_latency: 237755.22
+  compute_latency: 433.51
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_top_imc_bottom_cmos_cost_aware_rebalancing_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: resnet50_hetero_top_imc_bottom_cmos_cost_aware_rebalancing_mapper
+  total_latency: 238188.73
+config: resnet50_hetero_top_imc_bottom_cmos
+history:
+- function_name: optimized_mesh_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "## Analysis of Nearest-Neighbor Mapper Weaknesses\n\n### 1. Key\
+    \ Weaknesses of Current Nearest-Neighbor Approach\n\n**A. Naive Distance-First\
+    \ Sorting Problem**\nThe mapper prioritizes chiplets solely by shortest path distance\
+    \ from the starting chiplet:\n```python\nchiplet_info.sort(key=lambda x: (x[1],\
+    \ -x[2], -x[3]))  # Distance, then available memory, then metric\n```\nThis creates\
+    \ several issues:\n- **Suboptimal load distribution**: Nearest chiplets get overloaded\
+    \ while distant ones remain underutilized\n- **No consideration of heterogeneous\
+    \ capabilities**: All 96 CMOS chiplets are treated identically despite potential\
+    \ performance variations in the mesh topology\n- **Inefficient for large layers**:\
+    \ Large ResNet50 layers cause \"clumping\" around starting points, ignoring potentially\
+    \ better global placement\n\n**B. Single-Starting-Point Bottleneck**\nThe algorithm\
+    \ uses only one starting chiplet per layer (either preferred or the chiplet with\
+    \ most available memory from previous layer):\n- **First layer**: Picks chiplet\
+    \ with maximum available memory\n- **Subsequent layers**: Uses chiplet with largest\
+    \ allocation from previous layer\n- **No fallback strategy**: If nearest chiplets\
+    \ lack capacity, mapping fails despite available capacity elsewhere\n\n**C. Reactive\
+    \ Rather Than Proactive Capacity Management**\nThe mapper doesn't consider:\n\
+    - **Future layer requirements**: No look-ahead capability\n- **Layer adjacency\
+    \ patterns**: Critical for minimizing communication in ResNet50's skip connections\n\
+    - **Cross-layer data dependencies**: Particularly important for residual connections\
+    \ in ResNet\n\n**D. Inefficient Percentage Allocation**\nThe percentage-based\
+    \ allocation has precision issues:\n```python\nalloc_percentage = (available_units\
+    \ * 100 / units_needed_full) if units_needed_full > 0 else 0\npercentage_remaining\
+    \ -= alloc_percentage\nresources_remaining -= math.ceil(alloc_percentage * crossbars_required\
+    \ / 100)\n```\n- **Integer rounding errors**: `math.ceil()` can over-allocate\
+    \ resources\n- **Capacity fragmentation**: Leaves unusable small capacity fragments\
+    \ across chiplets\n\n**E. Ignoring Network Congestion**\nDespite having network\
+    \ topology (10\xD710 mesh) and shortest paths precomputed, the mapper doesn't\
+    \ consider:\n- **Communication hotspots**: Corner I/O chiplets create traffic\
+    \ patterns\n- **Link contention**: Multiple layers communicating through same\
+    \ intermediate chiplets\n- **Bandwidth constraints**: 128-bit packets on 1GHz\
+    \ network have physical limits\n\n### 2. Specific Opportunities for Improvement\n\
+    \n**A. Leverage Mesh Topology Structure**\nWith a 10\xD710 mesh and 4 corner I/O\
+    \ chiplets:\n- **Implement quadrant-based mapping**: Split workload into 4 logical\
+    \ quadrants (25 chiplets each)\n- **Use diagonal patterns**: Map layers along\
+    \ mesh diagonals to maximize parallel communication paths\n- **Exploit I/O proximity**:\
+    \ Place early/late layers near respective I/O chiplets\n\n**B. ResNet50-Specific\
+    \ Optimizations**\nResNet50 has unique characteristics:\n- **Bottleneck blocks**:\
+    \ 1\xD71, 3\xD73, 1\xD71 conv patterns\n- **Skip connections**: Require low-latency\
+    \ between specific layer pairs\n- **Decreasing spatial dimensions**: Later layers\
+    \ have smaller activation maps but more channels\n\n**Recommended mapping strategy:**\n\
+    1. **Stage 1 (large spatial maps)**: Distribute across many chiplets near input\
+    \ I/O\n2. **Stage 2-4**: Use compact clusters to minimize skip connection latency\n\
+    3. **Stage 5 (classifier)**: Concentrate near output I/O chiplets\n\n**C. Heterogeneity-Aware\
+    \ Mapping**\nThough all 96 are CMOS_Compute, mesh positions matter:\n- **Edge\
+    \ vs. center chiplets**: Different communication characteristics\n- **I/O adjacency**:\
+    \ Chiplets near I/O should handle more communication-intensive layers\n\n**D.\
+    \ Batch Processing Optimization**\nGiven `weight_loading_strategy: all_at_once`:\n\
+    - **Contiguous allocation**: Prefer allocating entire layers to fewer chiplets\n\
+    - **Weight locality**: Keep layer weights together to minimize weight loading\
+    \ overhead\n\n### 3. Missing Data/Signals the Mapper Should Use\n\n**A. Layer\
+    \ Communication Requirements**\nThe mapper lacks:\n- **Activation volumes**: Input/output\
+    \ activation sizes for each layer\n- **Data reuse patterns**: Which layers share\
+    \ weights or activations\n- **Skip connection distances**: For ResNet50, distance\
+    \ between residual connection endpoints\n\n**B. Network State Information**\n\
+    - **Current link utilization**: To avoid congestion hotspots\n- **Pending communications**:\
+    \ From previously mapped layers\n- **I/O chiplet loading**: Corner chiplets handling\
+    \ multiple models\n\n**C. Performance Prediction Metrics**\n- **Computation-to-communication\
+    \ ratio**: For each layer type\n- **Memory access patterns**: Help decide between\
+    \ contiguous vs. distributed allocation\n- **Pipeline dependencies**: Critical\
+    \ path information for throughput optimization\n\n**D. Workload-Aware Signals**\n\
+    From `workload_resnet50.csv`:\n- **Layer execution frequency**: If known from\
+    \ profiling\n- **Data dependencies**: Beyond simple layer ordering\n- **Batch\
+    \ size implications**: Affects activation transfer volumes\n\n### Recommended\
+    \ Improvements\n\n1. **Implement hierarchical mapping**:\n   - First pass: Assign\
+    \ layers to mesh quadrants\n   - Second pass: Fine-grained chiplet assignment\
+    \ within quadrants\n\n2. **Add cost function optimization**:\n   ```python\n \
+    \  def calculate_mapping_cost(chiplet_ids, layer_info, previous_mappings):\n \
+    \      # Consider: distance to previous layers, available capacity, \n       #\
+    \ network congestion, I/O proximity, residual connection distances\n   ```\n\n\
+    3. **Introduce fallback strategies**:\n   - When nearest neighbor fails, try k-means\
+    \ clustering of available chiplets\n   - Implement gradual expansion from optimal\
+    \ starting point\n\n4. **Add ResNet50-specific heuristics**:\n   - Identify and\
+    \ co-locate layers connected by skip connections\n   - Map bottleneck blocks as\
+    \ atomic units when possible\n\n5. **Utilize mesh topology properties**:\n   -\
+    \ Prefer Manhattan distance-based spreading over simple nearest-neighbor\n   -\
+    \ Use multiple starting points for large layers (>25% of total chiplets)\n\nThe\
+    \ current mapper's simplicity makes it fast but suboptimal for the 10\xD710 mesh\
+    \ with ResNet50. Adding modest complexity with topology-aware and workload-specific\
+    \ heuristics could significantly improve performance without excessive computational\
+    \ overhead."
+  function_name: optimized_mesh_mapper
+  improvement_pct:
+    comm_latency: -15.921224915959273
+    compute_latency: -2443.3524866257185
+    total_latency: -16.368528105226137
+  iteration: 1
+  metrics:
+    comm_latency: 317442.67
+    compute_latency: 1283.63
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_top_imc_bottom_cmos_optimized_mesh_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 317442.67
+        compute_latency: 1283.63
+        total_latency: 318726.3
+    results_label: resnet50_hetero_top_imc_bottom_cmos_optimized_mesh_mapper
+    total_latency: 318726.3
+  outcome: NO_IMPROVEMENT
+- function_name: nearest_neighbor_mapper_v4
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on the analysis and previous optimization attempts, I'll\
+    \ propose a fundamentally different strategy that addresses the core weaknesses\
+    \ while being practical to implement.\n\n## New Optimization Strategy: **Contiguous\
+    \ Block Mapping with Skip-Aware Placement**\n\n### Core Concept\nInstead of nearest-neighbor\
+    \ spreading, allocate **contiguous rectangular blocks** of chiplets for each layer/residual\
+    \ block, prioritizing placement to minimize skip connection distances in ResNet50.\n\
+    \n### Specific Implementation Changes for `_nearest_neighbor_mapper_v3`:\n\n####\
+    \ 1. **ResNet50 Block Detection & Treatment**\n```python\ndef _detect_resnet_block(self,\
+    \ layer_name, layer_type):\n    \"\"\"Identify if layer belongs to a ResNet bottleneck\
+    \ block and which stage\"\"\"\n    # Parse layer names to identify stages and\
+    \ blocks\n    # Example patterns: \"layer1.0.conv1\", \"layer2.3.conv2\"\n   \
+    \ import re\n    patterns = [\n        r'layer(\\d+)\\.(\\d+)\\.conv(\\d+)', \
+    \ # Standard ResNet\n        r'stage(\\d+)_block(\\d+)_conv(\\d+)',  # Alternative\
+    \ naming\n    ]\n    \n    for pattern in patterns:\n        match = re.search(pattern,\
+    \ layer_name)\n        if match:\n            stage = int(match.group(1))\n  \
+    \          block = int(match.group(2))\n            conv_pos = int(match.group(3))\n\
+    \            return {\n                'stage': stage,\n                'block':\
+    \ block,\n                'conv_position': conv_pos,  # 1, 2, or 3 for bottleneck\n\
+    \                'is_skip_input': conv_pos == 1,\n                'is_skip_output':\
+    \ conv_pos == 3\n            }\n    return None\n```\n\n#### 2. **Contiguous Block\
+    \ Finder**\n```python\ndef _find_contiguous_block(self, required_chiplets, starting_chiplet_id,\
+    \ \n                          available_capacity, min_dimension=2):\n    \"\"\"\
+    \n    Find a contiguous rectangular block of chiplets with sufficient capacity.\n\
+    \    Prioritizes blocks that minimize Manhattan distance to starting chiplet.\n\
+    \    \"\"\"\n    chiplet_positions = {}  # chiplet_id -> (row, col) in 10x10 mesh\n\
+    \    for n in self.system.chiplet_network.nodes():\n        # Assuming network\
+    \ nodes have position attributes or we can infer from ID\n        row = (n - 1)\
+    \ // 10\n        col = (n - 1) % 10\n        chiplet_positions[n] = (row, col)\n\
+    \    \n    # Sort chiplets by distance to starting point\n    start_pos = chiplet_positions[starting_chiplet_id]\n\
+    \    available_with_pos = []\n    \n    for chiplet_id in range(1, 101):\n   \
+    \     if chiplet_id in chiplet_positions and available_capacity[chiplet_id-1]\
+    \ > 0:\n            pos = chiplet_positions[chiplet_id]\n            dist = abs(pos[0]\
+    \ - start_pos[0]) + abs(pos[1] - start_pos[1])\n            available_with_pos.append((chiplet_id,\
+    \ pos, dist, available_capacity[chiplet_id-1]))\n    \n    # Try to find rectangular\
+    \ blocks of various dimensions\n    required_area = required_chiplets\n    best_block\
+    \ = None\n    best_score = float('inf')\n    \n    # Try squares first, then rectangles\n\
+    \    for height in range(min_dimension, 11):\n        for width in range(min_dimension,\
+    \ 11):\n            if height * width >= required_area:\n                # Try\
+    \ all possible placements\n                for r in range(11 - height):\n    \
+    \                for c in range(11 - width):\n                        block_chiplets\
+    \ = []\n                        total_capacity = 0\n                        \n\
+    \                        for dr in range(height):\n                          \
+    \  for dc in range(width):\n                                chiplet_id = r * 10\
+    \ + c + dr * 10 + dc + 1\n                                if chiplet_id <= 100\
+    \ and chiplet_id in chiplet_positions:\n                                    idx\
+    \ = chiplet_id - 1\n                                    if available_capacity[idx]\
+    \ > 0:\n                                        block_chiplets.append(chiplet_id)\n\
+    \                                        total_capacity += available_capacity[idx]\n\
+    \                        \n                        if len(block_chiplets) >= required_area:\n\
+    \                            # Calculate score: distance + fragmentation penalty\n\
+    \                            avg_distance = sum(abs(chiplet_positions[cid][0]\
+    \ - start_pos[0]) + \n                                              abs(chiplet_positions[cid][1]\
+    \ - start_pos[1])\n                                              for cid in block_chiplets[:required_area])\
+    \ / required_area\n                            \n                            #\
+    \ Prefer blocks that align with previous block's orientation\n               \
+    \             alignment_score = 0\n                            if hasattr(self,\
+    \ '_last_block_dimensions'):\n                                last_h, last_w =\
+    \ self._last_block_dimensions\n                                alignment_score\
+    \ = abs(height - last_h) + abs(width - last_w)\n                            \n\
+    \                            score = avg_distance * 0.7 + alignment_score * 0.3\n\
+    \                            \n                            if score < best_score:\n\
+    \                                best_score = score\n                        \
+    \        best_block = block_chiplets[:required_area]\n                       \
+    \         self._last_block_dimensions = (height, width)\n    \n    return best_block\n\
+    ```\n\n#### 3. **Modified Mapper Logic**\nReplace the current chiplet-by-chiplet\
+    \ allocation with:\n\n```python\ndef _nearest_neighbor_mapper_v3_enhanced(self,\
+    \ model_layer_info, system, preference, \n                                   \
+    \     current_available_crossbars, layer_mappings=None, \n                   \
+    \                     shortest_paths=None):\n    # ... existing setup code ...\n\
+    \    \n    # Detect if this is part of a ResNet block\n    resnet_info = self._detect_resnet_block(layer_name,\
+    \ layer_info.get('layer_type', ''))\n    \n    if resnet_info and resnet_info['conv_position']\
+    \ == 1:\n        # First conv in a block - allocate contiguously for entire block\n\
+    \        estimated_block_chiplets = min(8, max(2, math.ceil(crossbars_required\
+    \ * 3 / 100)))\n        block_chiplets = self._find_contiguous_block(\n      \
+    \      estimated_block_chiplets, \n            starting_chiplet,\n           \
+    \ current_available_crossbars\n        )\n        \n        if block_chiplets:\n\
+    \            # Allocate this layer to first portion of block\n            chips_per_conv\
+    \ = max(1, len(block_chiplets) // 3)\n            layer_chiplets = block_chiplets[:chips_per_conv]\n\
+    \            \n            # Store block allocation for subsequent convs in same\
+    \ block\n            self._current_resnet_block = {\n                'block_id':\
+    \ f\"{resnet_info['stage']}_{resnet_info['block']}\",\n                'all_chiplets':\
+    \ block_chiplets,\n                'conv1_chiplets': layer_chiplets,\n       \
+    \         'remaining_chiplets': block_chiplets[chips_per_conv:],\n           \
+    \     'conv_count': 1\n            }\n            \n            # Allocate to\
+    \ these chiplets\n            for chiplet_id in layer_chiplets:\n            \
+    \    idx = chiplet_id - 1\n                # ... allocation logic ...\n      \
+    \          \n    elif resnet_info and hasattr(self, '_current_resnet_block'):\n\
+    \        # Subsequent conv in same block\n        block_data = self._current_resnet_block\n\
+    \        block_data['conv_count'] += 1\n        \n        if block_data['conv_count']\
+    \ <= 3:\n            chips_per_conv = max(1, len(block_data['all_chiplets']) //\
+    \ 3)\n            start_idx = (block_data['conv_count'] - 1) * chips_per_conv\n\
+    \            end_idx = min(start_idx + chips_per_conv, len(block_data['all_chiplets']))\n\
+    \            layer_chiplets = block_data['all_chiplets'][start_idx:end_idx]\n\
+    \            \n            # ... allocation logic ...\n            \n        \
+    \    if block_data['conv_count'] == 3:\n                # Last conv in block -\
+    \ handle skip connection optimization\n                self._optimize_skip_placement(block_data,\
+    \ layer_mappings)\n                delattr(self, '_current_resnet_block')\n  \
+    \  \n    else:\n        # Non-ResNet or standalone layer - use improved version\
+    \ of original algorithm\n        return self._improved_general_mapper(model_layer_info,\
+    \ system, preference,\n                                            current_available_crossbars,\
+    \ layer_mappings,\n                                            shortest_paths)\n\
+    ```\n\n#### 4. **Skip Connection Optimizer**\n```python\ndef _optimize_skip_placement(self,\
+    \ block_data, layer_mappings):\n    \"\"\"\n    Ensure the output of this block\
+    \ is placed near its input for skip connection.\n    \"\"\"\n    if len(layer_mappings)\
+    \ < 2:\n        return\n    \n    # Find the input layer to this block (skip connection\
+    \ source)\n    # This would require tracking layer dependencies, which could be\
+    \ added\n    # For now, we ensure block output is near block input\n    \n   \
+    \ input_chiplet = block_data['conv1_chiplets'][0] if block_data['conv1_chiplets']\
+    \ else None\n    output_chiplet = block_data['all_chiplets'][-1] if block_data['all_chiplets']\
+    \ else None\n    \n    if input_chiplet and output_chiplet:\n        # Log for\
+    \ analysis - in practice, we would reallocate if too far\n        distance = abs((input_chiplet-1)//10\
+    \ - (output_chiplet-1)//10) + \\\n                   abs((input_chiplet-1)%10\
+    \ - (output_chiplet-1)%10)\n        \n        if distance > 3:  # Threshold for\
+    \ ResNet skip connections\n            print(f\"\u26A0\uFE0F Skip connection distance\
+    \ {distance} may be suboptimal\")\n```\n\n### Key Advantages of This Approach:\n\
+    \n1. **Exploits ResNet50 Structure**: Treats bottleneck blocks as atomic units\n\
+    2. **Contiguous Allocation**: Reduces communication overhead within blocks\n3.\
+    \ **Skip Connection Awareness**: Minimizes latency for residual connections\n\
+    4. **Mesh Topology Utilization**: Uses rectangular blocks that align with mesh\
+    \ structure\n5. **Load Balancing**: Distributes blocks across mesh rather than\
+    \ spreading single layers\n\n### Implementation Priority:\n\n1. **First**: Implement\
+    \ block detection and contiguous block finder\n2. **Second**: Modify mapper to\
+    \ use block allocation for ResNet layers\n3. **Third**: Add skip connection optimization\n\
+    4. **Fourth**: Fallback to improved general mapper for non-ResNet layers\n\n###\
+    \ Expected Benefits:\n- **Reduced communication**: Contiguous blocks minimize\
+    \ hop counts\n- **Better load distribution**: Blocks spread across mesh more evenly\n\
+    - **Lower latency**: Skip connections handled more efficiently\n- **Preserved\
+    \ locality**: Related computations stay close together\n\nThis strategy fundamentally\
+    \ changes from \"spread each layer\" to \"cluster related computations\" - which\
+    \ should better match ResNet50's architecture and the 10\xD710 mesh topology."
+  function_name: nearest_neighbor_mapper_v4
+  improvement_pct:
+    comm_latency: 0.0
+    compute_latency: 0.0
+    total_latency: 0.0
+  iteration: 2
+  metrics:
+    comm_latency: 273843.44
+    compute_latency: 50.47
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_top_imc_bottom_cmos_nearest_neighbor_mapper_v4/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 273843.44
+        compute_latency: 50.47
+        total_latency: 273893.9
+    results_label: resnet50_hetero_top_imc_bottom_cmos_nearest_neighbor_mapper_v4
+    total_latency: 273893.9
+  outcome: NO_IMPROVEMENT
+- function_name: cost_aware_rebalancing_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on the analysis and the latency improvement from Iteration\
+    \ 2 (273,893.9 vs 318,726.3, ~14% reduction), we see that **some improvement is\
+    \ possible but the nearest-neighbor approach still has fundamental limitations**.\
+    \ Let me propose a different, more balanced strategy that addresses the core weaknesses\
+    \ while being practical to implement.\n\n## New Optimization Strategy: **Cost-Aware\
+    \ Greedy with Rebalancing**\n\n### Core Idea\nInstead of pure nearest-neighbor,\
+    \ use a **cost function** that balances three factors for each candidate chiplet:\
+    \ **distance penalty**, **capacity utilization**, and **communication load**.\
+    \ After initial placement, apply a **rebalancing phase** to spread load more evenly.\n\
+    \n### Key Changes to `_nearest_neighbor_mapper_v3`:\n\n#### 1. **Enhanced Cost\
+    \ Function**\n```python\ndef _calculate_chiplet_cost(self, chiplet_id, candidate_info,\
+    \ layer_info, \n                           previous_mappings, available_capacity,\
+    \ network_load_map):\n    \"\"\"\n    Calculate comprehensive cost for placing\
+    \ part of a layer on this chiplet.\n    Lower cost is better.\n    \"\"\"\n  \
+    \  chiplet_idx = chiplet_id - 1\n    \n    # 1. Distance cost (Manhattan distance\
+    \ from previous layer's primary chiplet)\n    distance_cost = 0\n    if previous_mappings\
+    \ and len(previous_mappings) > 0:\n        last_layer_map = previous_mappings[-1][1]\n\
+    \        if last_layer_map:\n            # Find chiplet with largest allocation\
+    \ in previous layer\n            primary_prev = max(last_layer_map, key=lambda\
+    \ x: x[1])[0]\n            if chiplet_id in self.shortest_paths.get(primary_prev,\
+    \ {}):\n                distance = self.shortest_paths[primary_prev][chiplet_id]\n\
+    \                # Scale by activation size if available\n                activation_size\
+    \ = layer_info.get('input_activation_size', 1)\n                distance_cost\
+    \ = distance * activation_size * 0.01\n    \n    # 2. Capacity utilization cost\
+    \ (penalize nearly full chiplets)\n    chiplet = self.system.chiplets[chiplet_idx]\n\
+    \    total_capacity = chiplet.get_total_memory()\n    used_capacity = total_capacity\
+    \ - (available_capacity[chiplet_idx] * chiplet.get_capacity_unit_size())\n   \
+    \ utilization = used_capacity / total_capacity if total_capacity > 0 else 0\n\
+    \    \n    # Quadratic penalty for high utilization (encourages load balancing)\n\
+    \    utilization_cost = (utilization ** 2) * 100\n    \n    # 3. Network congestion\
+    \ cost\n    congestion_cost = 0\n    if network_load_map and chiplet_id in network_load_map:\n\
+    \        # Penalize chiplets that are already communication hotspots\n       \
+    \ congestion_cost = network_load_map[chiplet_id] * 10\n    \n    # 4. I/O proximity\
+    \ bonus/penalty\n    io_cost = 0\n    if self.system.is_io_chiplet(chiplet_id):\n\
+    \        # Avoid placing compute on I/O chiplets\n        io_cost = 1000\n   \
+    \ else:\n        # Check distance to nearest I/O chiplet\n        io_distances\
+    \ = []\n        for io_id in [1, 10, 91, 100]:  # Corner I/O chiplets in 10x10\
+    \ mesh\n            if io_id in self.shortest_paths.get(chiplet_id, {}):\n   \
+    \             io_distances.append(self.shortest_paths[chiplet_id][io_id])\n  \
+    \      \n        if io_distances:\n            min_io_distance = min(io_distances)\n\
+    \            # Layers with large activations benefit from being near I/O\n   \
+    \         activation_size = layer_info.get('input_activation_size', 1)\n     \
+    \       if activation_size > 1000000:  # Large activation\n                io_cost\
+    \ = min_io_distance * 5\n            else:  # Small activation\n             \
+    \   io_cost = min_io_distance * 0.5\n    \n    # Weighted sum of costs (tune these\
+    \ weights based on preference)\n    weights = {\n        'distance': self.preference.get('performance',\
+    \ 1),\n        'utilization': 0.5,  # Moderate load balancing\n        'congestion':\
+    \ 0.3,\n        'io': 0.2\n    }\n    \n    total_cost = (\n        distance_cost\
+    \ * weights['distance'] +\n        utilization_cost * weights['utilization'] +\n\
+    \        congestion_cost * weights['congestion'] +\n        io_cost * weights['io']\n\
+    \    )\n    \n    return total_cost\n```\n\n#### 2. **Network Load Tracking**\n\
+    ```python\nclass ModelMapper:\n    def __init__(self, system, mapping_function=\"\
+    nearest_neighbor_v3\", preference=None):\n        # ... existing init code ...\n\
+    \        \n        # Track network load per chiplet (simplified model)\n     \
+    \   self.network_load = {chiplet_id: 0 for chiplet_id in range(1, len(system.chiplets)\
+    \ + 1)}\n        \n        # Track layer dependencies for ResNet skip connections\n\
+    \        self.skip_connections = {}  # layer_name -> list of dependent layer names\n\
+    \        \n    def _update_network_load(self, chiplet_id, layer_info):\n     \
+    \   \"\"\"Update network load estimate for a chiplet\"\"\"\n        # Estimate\
+    \ communication based on layer type and size\n        if layer_info['layer_type']\
+    \ == 'conv':\n            # Conv layers: activations + partial sums\n        \
+    \    comm_estimate = layer_info.get('input_activation_size', 1000) * 2\n     \
+    \   elif layer_info['layer_type'] == 'fc':\n            # FC layers: mainly weight\
+    \ loading\n            comm_estimate = layer_info.get('num_weights', 1000)\n \
+    \       else:\n            comm_estimate = 1000\n            \n        # Update\
+    \ this chiplet and its neighbors (simplified mesh model)\n        self.network_load[chiplet_id]\
+    \ += comm_estimate\n        \n        # Also update neighbors (1 hop away)\n \
+    \       row = (chiplet_id - 1) // 10\n        col = (chiplet_id - 1) % 10\n  \
+    \      \n        neighbors = []\n        if row > 0: neighbors.append(chiplet_id\
+    \ - 10)\n        if row < 9: neighbors.append(chiplet_id + 10)\n        if col\
+    \ > 0: neighbors.append(chiplet_id - 1)\n        if col < 9: neighbors.append(chiplet_id\
+    \ + 1)\n        \n        for neighbor in neighbors:\n            if 1 <= neighbor\
+    \ <= 100:\n                self.network_load[neighbor] += comm_estimate * 0.3\
+    \  # Reduced impact\n```\n\n#### 3. **Main Mapper with Cost-Based Selection**\n\
+    ```python\ndef _nearest_neighbor_mapper_v3_enhanced(self, model_layer_info, system,\
+    \ preference, \n                                        current_available_crossbars,\
+    \ layer_mappings=None, \n                                        shortest_paths=None):\n\
+    \    # ... existing setup code until sorted_chiplets_ids calculation ...\n   \
+    \ \n    # Instead of simple distance sorting, use cost-based selection\n    chiplet_costs\
+    \ = []\n    for chiplet_id in available_chiplet_ids:\n        cost = self._calculate_chiplet_cost(\n\
+    \            chiplet_id=chiplet_id,\n            candidate_info={\n          \
+    \      'distance': distances.get(chiplet_id, math.inf),\n                'available_memory':\
+    \ avail_memory_list[chiplet_id-1],\n                'metric_value': chiplet_network.nodes[chiplet_id].get(active_metric,\
+    \ 0)\n            },\n            layer_info=model_layer_info,\n            previous_mappings=layer_mappings,\n\
+    \            available_capacity=current_available_crossbars,\n            network_load_map=self.network_load\n\
+    \        )\n        chiplet_costs.append((chiplet_id, cost))\n    \n    # Sort\
+    \ by cost (lowest first)\n    chiplet_costs.sort(key=lambda x: x[1])\n    sorted_chiplets_ids\
+    \ = [chiplet_id for chiplet_id, cost in chiplet_costs]\n    \n    # Allocate using\
+    \ sorted list\n    for chiplet_id in sorted_chiplets_ids:\n        # ... existing\
+    \ allocation logic ...\n        \n        if alloc_percentage > 0:\n         \
+    \   # Update network load for successful allocation\n            self._update_network_load(chiplet_id,\
+    \ model_layer_info)\n            \n            # Update chiplet utilization tracking\n\
+    \            self.chiplet_utilization[chiplet_id] = \\\n                (self.chiplet_utilization.get(chiplet_id,\
+    \ 0) + \n                 (alloc_percentage / 100) * model_layer_info.get('total_macs',\
+    \ 1000))\n    \n    # After allocation, check if rebalancing is needed\n    if\
+    \ not mapping_failed:\n        action = self._try_rebalance_allocation(\n    \
+    \        action=action,\n            layer_info=model_layer_info,\n          \
+    \  current_available_crossbars=remaining_capacity,\n            original_allocation=action.copy()\n\
+    \        )\n    \n    return remaining_capacity, action, mapping_failed, failure_reason\n\
+    ```\n\n#### 4. **Rebalancing Phase**\n```python\ndef _try_rebalance_allocation(self,\
+    \ action, layer_info, current_available_crossbars, \n                        \
+    \     original_allocation):\n    \"\"\"\n    Try to rebalance allocation to improve\
+    \ load distribution.\n    Moves small percentages from highly utilized to less\
+    \ utilized chiplets.\n    \"\"\"\n    # Only rebalance if layer is spread across\
+    \ multiple chiplets\n    allocated_chiplets = [i for i, pct in enumerate(action)\
+    \ if pct > 0]\n    if len(allocated_chiplets) < 2:\n        return action\n  \
+    \  \n    # Calculate current utilization scores\n    utilizations = {}\n    for\
+    \ chiplet_idx in allocated_chiplets:\n        chiplet_id = chiplet_idx + 1\n \
+    \       chiplet = self.system.chiplets[chiplet_idx]\n        total_capacity =\
+    \ chiplet.get_total_memory()\n        used = total_capacity - (current_available_crossbars[chiplet_idx]\
+    \ * \n                                chiplet.get_capacity_unit_size())\n    \
+    \    utilizations[chiplet_idx] = used / total_capacity if total_capacity > 0 else\
+    \ 0\n    \n    # Sort by utilization (highest first)\n    high_util = sorted([(idx,\
+    \ util) for idx, util in utilizations.items()], \n                      key=lambda\
+    \ x: x[1], reverse=True)\n    low_util = sorted([(idx, util) for idx, util in\
+    \ utilizations.items()], \n                     key=lambda x: x[1])\n    \n  \
+    \  # Try to move up to 20% of allocation from high to low utilization\n    rebalance_amount\
+    \ = 0.20  # Max percentage to move\n    \n    for high_idx, high_utilization in\
+    \ high_util:\n        for low_idx, low_utilization in low_util:\n            if\
+    \ high_idx == low_idx:\n                continue\n            \n            #\
+    \ Calculate amount to move\n            current_pct = action[high_idx]\n     \
+    \       if current_pct <= 5:  # Don't move very small allocations\n          \
+    \      continue\n                \n            move_pct = min(current_pct * rebalance_amount,\
+    \ 10)  # Max 10% per move\n            \n            # Check if low utilization\
+    \ chiplet has capacity\n            units_needed_full = self._calculate_layer_requirements(\n\
+    \                layer_info, self.system.chiplets[low_idx])\n            required_units\
+    \ = math.ceil(move_pct * units_needed_full / 100)\n            \n            if\
+    \ (current_available_crossbars[low_idx] >= required_units and\n              \
+    \  action[low_idx] + move_pct <= 100):\n                \n                # Perform\
+    \ the move\n                action[high_idx] -= move_pct\n                action[low_idx]\
+    \ += move_pct\n                current_available_crossbars[high_idx] += required_units\n\
+    \                current_available_crossbars[low_idx] -= required_units\n    \
+    \            \n                # Update network loads\n                self._update_network_load(high_idx\
+    \ + 1, layer_info)\n                self._update_network_load(low_idx + 1, layer_info)\n\
+    \                \n                # Recalculate utilizations\n              \
+    \  break\n    \n    return action\n```\n\n#### 5. **ResNet-Specific Optimization**\n\
+    ```python\ndef _identify_resnet_skip_pairs(self, layer_name, model_metrics):\n\
+    \    \"\"\"Identify layers that form skip connections in ResNet50\"\"\"\n    #\
+    \ Simplified pattern matching for ResNet50\n    skip_patterns = [\n        # Conv2\
+    \ before add (e.g., layer1.0.conv2 -> layer1.0.add)\n        (r'(layer\\d+\\.\\\
+    d+\\.conv2)', r'\\1'.replace('conv2', 'add')),\n        # Conv3 before add (e.g.,\
+    \ layer1.0.conv3 -> layer1.0.add)\n        (r'(layer\\d+\\.\\d+\\.conv3)', r'\\\
+    1'.replace('conv3', 'add')),\n    ]\n    \n    skip_pairs = []\n    for pattern,\
+    \ target_pattern in skip_patterns:\n        import re\n        match = re.match(pattern,\
+    \ layer_name)\n        if match:\n            base = match.group(1)\n        \
+    \    # Find the target layer in model metrics\n            for other_layer in\
+    \ model_metrics:\n                if re.match(target_pattern, other_layer['name']):\n\
+    \                    skip_pairs.append((layer_name, other_layer['name']))\n  \
+    \                  break\n    \n    return skip_pairs\n\ndef _apply_skip_optimization(self,\
+    \ current_layer_name, action, model_metrics):\n    \"\"\"Adjust allocation to\
+    \ minimize skip connection distances\"\"\"\n    skip_pairs = self._identify_resnet_skip_pairs(current_layer_name,\
+    \ model_metrics)\n    \n    if not skip_pairs:\n        return action\n    \n\
+    \    # For each skip connection partner, try to co-locate allocations\n    for\
+    \ source_layer, target_layer in skip_pairs:\n        # Find where target layer\
+    \ was allocated (if already mapped)\n        target_allocation = None\n      \
+    \  for layer_idx, mapping in enumerate(self.previous_mappings):\n            if\
+    \ mapping[0] == target_layer:\n                target_allocation = mapping[1]\n\
+    \                break\n        \n        if target_allocation:\n            #\
+    \ Get primary chiplet for target\n            target_chiplets = [cid for cid,\
+    \ pct in target_allocation if pct > 0]\n            if target_chiplets:\n    \
+    \            primary_target = max(target_allocation, key=lambda x: x[1])[0]\n\
+    \                \n                # Adjust current allocation to favor proximity\
+    \ to target\n                for chiplet_idx, pct in enumerate(action):\n    \
+    \                if pct > 0:\n                        chiplet_id = chiplet_idx\
+    \ + 1\n                        distance = self.shortest_paths.get(primary_target,\
+    \ {}).get(chiplet_id, 10)\n                        \n                        #\
+    \ Penalize distant allocations\n                        if distance > 3:\n   \
+    \                         # Try to move some allocation closer\n             \
+    \               self._move_allocation_toward_target(\n                       \
+    \         action, chiplet_idx, primary_target, \n                            \
+    \    distance, pct, model_layer_info)\n    \n    return action\n```\n\n### Why\
+    \ This Strategy is Different and Better:\n\n1. **Multi-Factor Optimization**:\
+    \ Balances distance, utilization, and congestion instead of just distance\n2.\
+    \ **Proactive Load Balancing**: The rebalancing phase actively spreads load after\
+    \ initial placement\n3. **Network-Aware**: Considers current network load to avoid\
+    \ hotspots\n4. **ResNet-Aware**: Special handling for skip connections without\
+    \ requiring full block detection\n5. **Adaptive**: Weights can be tuned based\
+    \ on preference (performance vs. energy)\n\n### Implementation Steps:\n\n1. **Add\
+    \ cost calculation** to evaluate chiplets holistically\n2. **Track network load**\
+    \ to avoid congestion\n3. **Implement rebalancing** phase after initial allocation\n\
+    4. **Add skip connection optimization** for ResNet-specific patterns\n5. **Keep\
+    \ nearest-neighbor as fallback** when cost calculation fails\n\n### Expected Benefits:\n\
+    \n- **Better load distribution**: Avoids overloading nearest chiplets\n- **Reduced\
+    \ congestion**: Considers network load during placement\n- **Improved skip connection\
+    \ latency**: Actively tries to place connected layers close\n- **More balanced\
+    \ utilization**: Rebalancing spreads work more evenly\n- **Maintains locality**:\
+    \ Still prefers nearby chiplets but with better balancing\n\nThis approach addresses\
+    \ the key weaknesses while being incrementally implementable and tunable based\
+    \ on the observed latency results."
+  function_name: cost_aware_rebalancing_mapper
+  improvement_pct:
+    comm_latency: 13.178413183825036
+    compute_latency: -758.9459084604715
+    total_latency: 13.03613187442291
+  iteration: 3
+  metrics:
+    comm_latency: 237755.22
+    compute_latency: 433.51
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_top_imc_bottom_cmos_cost_aware_rebalancing_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 237755.22
+        compute_latency: 433.51
+        total_latency: 238188.73
+    results_label: resnet50_hetero_top_imc_bottom_cmos_cost_aware_rebalancing_mapper
+    total_latency: 238188.73
+  outcome: IMPROVED
+max_iterations: 3
+total_iterations: 3

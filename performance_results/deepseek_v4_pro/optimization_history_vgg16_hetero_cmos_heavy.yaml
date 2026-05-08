@@ -1,0 +1,396 @@
+baseline_metrics:
+  comm_latency: 296241.43
+  compute_latency: 245.15
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_cmos_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296486.57
+best_metrics:
+  comm_latency: 296241.43
+  compute_latency: 245.15
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_cmos_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296486.57
+config: vgg16_hetero_cmos_heavy
+history:
+- function_name: optimized_nn_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "### 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\
+    \nThe `_nearest_neighbor_mapper_v3` is a greedy, layer\u2011by\u2011layer placement\
+    \ algorithm that **does not model the actual communication flow**, **ignores global\
+    \ resource balancing**, and **lacks lookahead**. Its main shortcomings:\n\n- **Unaware\
+    \ of true communication demands**  \n  It chooses a single \u201Cstarting chiplet\u201D\
+    \ for each layer (the dominant chiplet of the previous layer) and sorts candidates\
+    \ by hop distance from that node. However, when a layer is split across multiple\
+    \ chiplets (as is common for large layers on CMOS), the **input activations must\
+    \ be gathered from all chips hosting the previous layer**, not just the largest\
+    \ chunk. The current heuristic treats the starting chiplet as the sole data source,\
+    \ leading to potentially **large, overlooked many\u2011to\u2011many traffic**\
+    \ that the mesh topology must support.\n\n- **Greedy capacity allocation without\
+    \ global planning**  \n  The algorithm allocates each layer\u2019s requirements\
+    \ by filling the nearest available chiplets in order, without considering future\
+    \ layers. This can **fragment chiplets**\u2014leaving small, hard\u2011to\u2011\
+    use capacity pockets\u2014and may **pre\u2011empt critical resources** that would\
+    \ be better suited for later, larger layers.\n\n- **No consideration of layer\
+    \ size or type differentiation**  \n  All layers are mapped with the same distance\u2011\
+    memory\u2011metric priority. For small layers, spreading across many chiplets\
+    \ adds unnecessary broadcast/reduce overhead; for huge layers, splitting is inevitable\
+    \ but the mapper doesn\u2019t balance the number of chiplets used against communication\
+    \ cost.\n\n- **Over\u2011reliance on a static node \u201Cmetric\u201D**  \n  The\
+    \ `active_metric` attribute from the chiplet network (performance/energy) is used\
+    \ as a tiebreaker but its meaning and value are opaque. In a 10\xD710 homogeneous\
+    \ CMOS\u2011heavy mesh, this likely **does not capture dynamic performance differences**\
+    \ and adds noise to the mapping decisions.\n\n- **Ignores the non\u2011pipelined\
+    \ communication model**  \n  The simulation uses Garnet in non\u2011pipelined\
+    \ mode, meaning every message contends for network resources. The mapper\u2019\
+    s hop\u2011count distance ignores **link bandwidth, injection rate limits, and\
+    \ potential hotspots** that arise when many flows concentrate on the same region.\n\
+    \n- **No awareness of weight\u2011stationary overheads**  \n  Weight\u2011stationary\
+    \ CMOS requires **input activations to be broadcast** to all chiplets that hold\
+    \ a partition of a layer, and **partial outputs must be collected**. The mapper\
+    \ neither accounts for the extra multicast/broadcast patterns nor tries to **co\u2011\
+    locate partitions** to reduce wire\u2011length.\n\n- **First\u2011layer starting\
+    \ point chosen arbitrarily**  \n  The initial chiplet is selected by sorting on\
+    \ (available memory, metric). In a homogeneous system with uniform resources,\
+    \ this effectively becomes a random choice, yet all subsequent placements chain\
+    \ from it, locking the entire mapping into a path that may not be globally optimal.\n\
+    \n### 2. Specific Opportunities for Improvement Given This Config\n\n- **Incorporate\
+    \ data\u2011flow awareness**  \n  Instead of pinning to the previous layer\u2019\
+    s maximum chunk, compute the **set of all source chiplets** from the previous\
+    \ layer\u2019s mapping and weigh the placement of the next layer\u2019s partitions\
+    \ by the **total activation volume that must be communicated**. For example, minimize\
+    \ \u2211(data_volume \xD7 hop_distance) for each candidate chiplet or use a gravity\
+    \ model.\n\n- **Use a global capacity\u2011aware heuristic**  \n  Implement a\
+    \ **progressive resource reservation**: when placing a large layer, reserve capacity\
+    \ on nearby chiplets for future layers that will logically follow, avoiding fragmentation.\
+    \ Alternatively, adopt a **bin\u2011packing style** that leaves contiguous free\
+    \ blocks on chiplets or on the mesh.\n\n- **Optimize partition granularity** \
+    \ \n  The mapper could **constrain the minimum percentage per chiplet** (e.g.,\
+    \ no less than 10%) to avoid spreading a layer too thinly, reducing the number\
+    \ of multicast destinations. The partitioner\u2019s rounding adjustment should\
+    \ also be designed to preserve load balance, perhaps by using a smarter distribution\
+    \ of the rounding error.\n\n- **Leverage mesh\u2011specific properties**  \n \
+    \ With a regular 10\xD710 mesh, you can pre\u2011compute not just hop counts but\
+    \ also **expected congestion levels** under random uniform traffic or use a simple\
+    \ analytical model of network saturation. This data can replace the raw hop\u2011\
+    distance sort with a **congestion\u2011aware cost function**.\n\n- **Joint placement\
+    \ of consecutive layers**  \n  For weight\u2011stationary CMOS, consecutive layers\
+    \ often share a producer\u2011consumer relationship. Map them **pairwise** so\
+    \ that the output partitions of layer L align with the input needs of layer L+1,\
+    \ drastically reducing data movement. This could be done by **clustering layer\
+    \ pairs** or by a forward\u2011backward propagation of mapping constraints.\n\n\
+    - **First\u2011layer placement strategy**  \n  Instead of a simple max\u2011memory\
+    \ tiebreaker, **evaluate several candidate starting chiplets** using a quick dummy\
+    \ run of the first few layers and pick the one that yields the best overall communication\
+    \ cost. This avoids the entire mapping being shackled to an unlucky first choice.\n\
+    \n### 3. Data/Signals the Mapper Currently Ignores but Should Use\n\n| Ignored\
+    \ Signal                     | Why It Matters                                \
+    \                                                  |\n|------------------------------------|-------------------------------------------------------------------------------------------------|\n\
+    | **Activation volume per layer**    | Determines the actual number of bytes to\
+    \ be sent/received; critical for weighting communication cost. |\n| **Distribution\
+    \ of previous layer\u2019s mapping** | The identity and size of *all* chips hosting\
+    \ the previous layer\u2019s partitions, not only the largest, define the true\
+    \ traffic sources. |\n| **Number of partitions for each layer** | Affects multicast\
+    \ fan\u2011out and gather complexity; the mapper should trade off parallelism\
+    \ against communication overhead. |\n| **Layer type and filter dimensions** |\
+    \ Conv layers with large filters may benefit from different splitting strategies\
+    \ (e.g., weight vs. input\u2011channel vs. output\u2011channel). |\n| **Chiplet\
+    \ occupancy history**      | Tracking which chiplets have been used heavily may\
+    \ reveal thermal or contention hotspots not captured by instantaneous free capacity.\
+    \ |\n| **Network bandwidth/link capacity**| In non\u2011pipelined Garnet, over\u2011\
+    subscription of certain links can cause backpressure; a flow\u2011based view prevents\
+    \ oversubscription. |\n| **Weight\u2011loading strategy (all\u2011at\u2011once)**\
+    \ | Affects initial mapping but also indicates that weight memory is static; however,\
+    \ spreading weights across more chiplets increases the total storage footprint\
+    \ and may exceed per\u2011chiplet limits in edge cases\u2014should be monitored.\
+    \ |\n| **IO chiplet locations (corners)** | Off\u2011chip communication cost (e.g.,\
+    \ for activation batching) could influence whether to place the first/last layer\
+    \ near corners. |\n| **Intra\u2011layer partial sum collection** | For output\u2011\
+    channel partitioning, each chiplet produces a subset of outputs; if a subsequent\
+    \ layer combines them, the mapper should plan a **reduction tree** instead of\
+    \ forcing all traffic to a single point. |\n\nBy integrating these signals, the\
+    \ mapper could evolve from a purely topological nearest\u2011neighbor greedy algorithm\
+    \ into a **data\u2011aware, congestion\u2011conscious placement** that significantly\
+    \ reduces inference latency on a large 10\xD710 mesh with non\u2011pipelined communication."
+  function_name: optimized_nn_mapper
+  improvement_pct:
+    comm_latency: 3.8793864855432196
+    compute_latency: -5902.635121354272
+    total_latency: -1.0044198629300383
+  iteration: 1
+  metrics:
+    comm_latency: 284749.08
+    compute_latency: 14715.46
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_cmos_heavy_optimized_nn_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 284749.08
+        compute_latency: 14715.46
+        total_latency: 299464.54
+    results_label: vgg16_hetero_cmos_heavy_optimized_nn_mapper
+    total_latency: 299464.54
+  outcome: NO_IMPROVEMENT
+- function_name: optimized_mapper_v2
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "### 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\
+    \nThe `_nearest_neighbor_mapper_v3` method is a **greedy, layer\u2011by\u2011\
+    layer placement** that treats each layer in isolation, only using the previous\
+    \ layer\u2019s largest partition as the placement anchor. In a weight\u2011stationary,\
+    \ non\u2011pipelined CMOS system on a 10\xD710 mesh, this leads to:\n\n- **Ignorance\
+    \ of Many\u2011to\u2011Many Communication**  \n  When a layer is split across\
+    \ multiple chiplets, its *input activations must be shipped to every chiplet holding\
+    \ a partition of that layer*. The mapper uses only the largest previous\u2011\
+    layer chiplet as a starting point, ignoring the full set of source nodes. The\
+    \ resulting multicast patterns, and the reverse gather for partial output collection,\
+    \ are unoptimized and can create severe hotspot congestion.\n\n- **Layer\u2011\
+    Level Fragmentation**  \n  The allocator fills the nearest available chiplet capacity\
+    \ until the layer\u2019s requirements are met. This can leave many chiplets with\
+    \ small, unusable residual capacity while simultaneously forcing subsequent layers\
+    \ to split across more chiplets than necessary, inflating both weight storage\
+    \ overhead and communication volume.\n\n- **No Global Resource Vision**  \n  Early\
+    \ layers might greedily consume chiplet capacity that would be far more valuable\
+    \ for later, larger layers, leading to suboptimal overall distribution of the\
+    \ 96 identical CMOS chiplets. The lack of any look\u2011ahead or backward propagation\
+    \ means the mapping is path\u2011dependent and brittle.\n\n- **Homogeneous\u2011\
+    System Tie\u2011Breakers Add Noise**  \n  With all CMOS chiplets identical, the\
+    \ `active_metric` and memory\u2011based sorting degenerates to an effectively\
+    \ random initial placement, which then dictates the entire mapping chain, often\
+    \ leading to unnecessarily long communication paths.\n\n- **Neglect of Weight\u2011\
+    Stationary Execution Cost**  \n  The mapper does not account for the **inference\u2011\
+    time data movement** that actually determines latency: broadcasting input feature\
+    \ maps, collecting partial sums, and redistributing them for the next layer. In\
+    \ non\u2011pipelined Garnet, these many\u2011to\u2011many flows directly compete\
+    \ for mesh link bandwidth.\n\n- **Inconsistent with Non\u2011Pipelined Network\
+    \ Constraints**  \n  Hop\u2011count distance alone ignores link capacity, injection\
+    \ rate limitations, and the fact that many concurrent flows can saturate certain\
+    \ mesh regions. The resulting mapping can suffocate localised areas of the mesh.\n\
+    \n### 2. Specific Opportunities for Improvement Given This Config\n\nGiven that\
+    \ previous attempts have not improved latency, a **fundamentally different placement\
+    \ philosophy** is required\u2014moving from greedy per\u2011layer allocation to\
+    \ a **global data\u2011flow\u2011driven partitioning and embedding**.\n\n- **Model\
+    \ the Entire Inference as a Task\u2011Flow Graph**  \n  Treat every partition\
+    \ of every layer as a node, with directed edges weighted by the amount of activation\
+    \ data transferred. Then perform a **quadratic placement (force\u2011directed)\
+    \ or spectral embedding** of this task graph onto the 10\xD710 mesh, minimising\
+    \ \u2211(data_volume \xD7 distance\xB2). This would automatically co\u2011locate\
+    \ producer\u2011consumer partitions and spread high\u2011traffic links across\
+    \ the mesh.\n\n- **Determine the Optimal Number of Partitions per Layer**  \n\
+    \  Before physical placement, solve a partitioning problem that balances **computation\
+    \ parallelism** against **communication cost**. For a 2.46M\u2011weight CMOS chiplet,\
+    \ large layers like VGG16\u2019s Conv4\u20113 (\u22487M weights) may need 3 chiplets;\
+    \ splitting into many more adds unnecessary broadcast/reduce traffic. A design\u2011\
+    space exploration can choose a partition factor for each layer that minimises\
+    \ an estimated total latency proxy.\n\n- **Use Recursive Bisection Mapping** \
+    \ \n  Bisect the task graph and the 10\xD710 mesh concurrently (e.g., with METIS\u2011\
+    style logic), ensuring that tightly connected partitions fall into physically\
+    \ close mesh regions. This naturally minimises global wirelength and balances\
+    \ mesh link utilisation.\n\n- **Explicitly Model Multicast and Reduce Trees**\
+    \  \n  Instead of haphazard broadcast, plan explicit **distribution trees** (e.g.,\
+    \ using a mesh\u2011aware Steiner tree) for input activations and **reduction\
+    \ trees** for partial output sums. Embed these trees during placement so that\
+    \ they avoid overloading central mesh links.\n\n- **First\u2011Layer and Last\u2011\
+    Layer Proximity to I/O**  \n  The 4 I/O chiplets at corners could become the injection\
+    \ point for the first layer\u2019s input and the sink for the final output. Place\
+    \ the first and last layers\u2019 chiplets near the corners to minimise off\u2011\
+    chip transfer distance without harming the overall mapping\u2014this can be baked\
+    \ into the global placement cost function.\n\n### 3. Data/Signals the Mapper Currently\
+    \ Ignores but Should Use\n\nTo enable the global placement strategy, the mapper\
+    \ must leverage signals that are currently discarded:\n\n| Ignored Signal    \
+    \                 | Required for Global Mapping                              \
+    \                                                                 |\n|------------------------------------|--------------------------------------------------------------------------------------------------------------------------|\n\
+    | **Activation Data Volume per Edge** | The exact number of bytes flowing from\
+    \ each CI chiplet (partition) to each CJ chiplet in consecutive layers. Essential\
+    \ for weighting placement edges. |\n| **Full Partition Map of Preceding Layer**\
+    \ | The set of all chiplet IDs holding previous\u2011layer partitions, not only\
+    \ the largest one, so that multicast sources are known. |\n| **Fan\u2011Out /\
+    \ Fan\u2011In of Each Partition** | Number of destinations a chiplet must send\
+    \ to (or receive from) affects network contention; placement should minimise this\
+    \ or distribute the load. |\n| **Layer Type and Partitioning Dimension** | Whether\
+    \ the layer is split along output channels, input channels, or spatial dimensions\
+    \ directly impacts data\u2011flow topology (e.g., output\u2011channel split requires\
+    \ a reduction for the next FC/Conv layer). |\n| **Chiplet Location in the Mesh**\
+    \ | The global cost function already uses distances, but a global placer must\
+    \ also account for link bandwidth sharing\u2014e.g., the number of flows crossing\
+    \ each mesh link. |\n| **Weight\u2011Stationary Cost Model** | The all\u2011at\u2011\
+    once weight loading means weights are static, but **during inference**, each chiplet\u2019\
+    s input buffer size and network injection/ejection rates bound performance. A\
+    \ queuing\u2011theoretic cost model would help. |\n| **Proximity to I/O Chiplets**\
+    \ | Not used at all; placing the network\u2019s entry/exit points near the corners\
+    \ can save several hops for every inference, a small but consistent gain. |\n\
+    | **Residual Capacity Distribution** | Instead of just available units, the **pattern\
+    \ of free space across chiplets** (which chiplet is completely empty, which is\
+    \ nearly full) influences the flexibility for later layers\u2014a global placer\
+    \ can use this as a soft constraint. |\n\nBy integrating these signals into a\
+    \ **simultaneous task\u2011graph embedding** (e.g., via force\u2011directed placement\
+    \ or simulated annealing of partition assignments), the mapper can escape the\
+    \ greedy local\u2011optimum trap and achieve a mapping that genuinely minimises\
+    \ end\u2011to\u2011end inference latency on the 10\xD710 non\u2011pipelined mesh."
+  function_name: optimized_mapper_v2
+  improvement_pct:
+    comm_latency: 3.833660268248102
+    compute_latency: -5801.599021007546
+    total_latency: -0.9665665463363116
+  iteration: 2
+  metrics:
+    comm_latency: 284884.54
+    compute_latency: 14467.77
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_cmos_heavy_optimized_mapper_v2/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 284884.54
+        compute_latency: 14467.77
+        total_latency: 299352.31
+    results_label: vgg16_hetero_cmos_heavy_optimized_mapper_v2
+    total_latency: 299352.31
+  outcome: NO_IMPROVEMENT
+- function_name: optimized_mapper_v3
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "### 1. Key Weaknesses of the Current Nearest\u2011Neighbor Approach\n\
+    \n- **Decoupled allocation and actual weight consumption**  \n  The mapper assigns\
+    \ percentages of a layer to chiplets based on a coarse \u201Cweight units\u201D\
+    \ model, but the partitioner later translates those percentages into integer numbers\
+    \ of output channels. Rounding can drastically alter the real weight footprint.\
+    \ For example, a 10% allocation on a chiplet may become 2 output channels out\
+    \ of 128, while 10\u202F% of the layer\u2019s weights might be much smaller. This\
+    \ mismatch causes over\u2011 or under\u2011utilisation of chiplet capacity that\
+    \ the mapper never sees, leading to **silent capacity violations** or wasted resources.\n\
+    \n- **No load\u2011balancing across partitions of the same layer**  \n  In a weight\u2011\
+    stationary CMOS chiplet, the time to compute a partition is proportional to the\
+    \ number of MACs assigned to it. The mapper fills the nearest chiplets with whatever\
+    \ capacity remains, often creating severely unbalanced partitions (e.g., one chiplet\
+    \ gets 60\u202F% of a heavy layer, another gets 5\u202F%). The slowest chiplet\
+    \ dictates the layer\u2019s completion time, so this **uneven partitioning extends\
+    \ latency** far beyond what a balanced split would require.\n\n- **Over\u2011\
+    splitting layers unnecessarily**  \n  The algorithm processes chiplets in nearest\u2011\
+    neighbor order, giving each a chunk until resources are exhausted. This often\
+    \ scatters a single layer across many chiplets (sometimes 10+), even when a smaller\
+    \ set could hold the whole layer. Each additional chiplet adds multicast source/destination\
+    \ points, inflating both broadcast traffic and partial\u2011sum collection cost,\
+    \ and **stress\u2011tests the non\u2011pipelined mesh**.\n\n- **Output\u2011channel\
+    \ partitioning breaks alignment between consecutive layers**  \n  The partitioner\
+    \ always splits along output channels. For two consecutive convolutional layers,\
+    \ the output channels of layer L become the input channels of layer L+1. If the\
+    \ partitioning of L and L+1 are not aligned to the same chips, every activation\
+    \ must cross the network, generating massive inter\u2011layer data movement. The\
+    \ mapper uses only the previous layer\u2019s largest chiplet as a seed, **ignoring\
+    \ the possibility of keeping producer\u2011consumer pairs on identical sets of\
+    \ chiplets**.\n\n- **Greedy capacity assignment causes fragmentation and path\u2011\
+    dependency**  \n  Early layers hog the closest chiplets, leaving small residual\
+    \ capacity pockets that are unusable for large later layers. This **forces later\
+    \ layers to fragment even further**, increasing communication and making the mapping\
+    \ heavily dependent on the arbitrary initial chiplet chosen (effectively random\
+    \ in a homogeneous system).\n\n- **Ignores compute\u2011unit parallelism and activation\
+    \ buffering constraints**  \n  The mapper treats capacity only as available weight\
+    \ memory, but a chiplet\u2019s MAC/cycle throughput and input buffer size are\
+    \ finite. A partition that fits in weight memory may still **exceed the chiplet\u2019\
+    s ability to process its input in a timely manner**, or may require more activation\
+    \ buffer than available, leading to backpressure and stalling that the placement\
+    \ does not anticipate.\n\n- **Static tie\u2011breaker metrics are meaningless\
+    \ in a homogeneous mesh**  \n  The `active_metric` attribute and memory\u2011\
+    based sorting degenerate to random choices, adding **noise without any performance\
+    \ benefit**, yet the entire mapping chain follows this arbitrary first\u2011chiplet\
+    \ decision.\n\n### 2. Specific Opportunities for Improvement Given This Config\n\
+    \n- **Unify capacity allocation and partition rounding**  \n  Instead of a two\u2011\
+    step process, the mapper could directly assign integer output\u2011channel counts\
+    \ to chiplets while tracking the actual weight units consumed. This would eliminate\
+    \ the rounding mismatch and guarantee that the final partition fits exactly without\
+    \ waste.\n\n- **Constrained load balancing within each layer**  \n  When splitting\
+    \ a layer, enforce a maximum imbalance ratio (e.g., no chiplet gets more than\
+    \ 2\xD7 the MACs of the lightest\u2011loaded one). Sort candidate chiplets by\
+    \ distance but **only allocate channel counts that satisfy the balance constraint**,\
+    \ filling the nearest ones while keeping the workload even. This keeps all chiplets\
+    \ busy for roughly the same time, shortening the layer\u2019s critical path.\n\
+    \n- **Channel\u2011aligned layer\u2011pair mapping**  \n  For any consecutive\
+    \ layers that can be co\u2011located (i.e., whose output channels equal the next\
+    \ layer\u2019s input channels), map them to **identical sets of chiplets with\
+    \ identical channel slices**. This eliminates inter\u2011layer activation traffic\
+    \ entirely for those pairs. The mapper can attempt this as a first\u2011class\
+    \ strategy: after mapping layer L to chiplet set S, try to map L+1 to the same\
+    \ set; only resort to a new placement if capacity is insufficient.\n\n- **Limit\
+    \ the maximum number of partitions per layer**  \n  Introduce a ceiling on the\
+    \ number of chiplets a single layer can be split across (e.g., \u2264\u202F4).\
+    \ If the nearest chiplets cannot accommodate the whole layer within that limit,\
+    \ pre\u2011emptively release capacity from slightly more distant but larger contiguous\
+    \ blocks, using a bin\u2011packing heuristic. This reduces communication fan\u2011\
+    out.\n\n- **Global, forward\u2011backward propagation of mapping constraints**\
+    \  \n  Perform a quick scan of the whole model to determine the total capacity\
+    \ required. Reserve blocks of chiplet memory for later layers that are known to\
+    \ be large. This can be implemented as a **pre\u2011reservation phase** that allocates\
+    \ major layers on high\u2011capacity areas, then finer\u2011grained filling for\
+    \ smaller layers, avoiding fragmentation.\n\n- **Incorporate a lightweight congestion\
+    \ cost**  \n  For the non\u2011pipelined 10\xD710 mesh, pre\u2011compute a simple\
+    \ traffic\u2011demand model: if a layer L is partitioned across set A and layer\
+    \ L+1 on set B, the total data volume is multiplied by the pairwise hop counts\
+    \ summed across all links. Use this as a cost function to compare alternative\
+    \ placements for a layer, not just the previous seed.\n\n- **Use I/O\u2011chiplet\
+    \ proximity for the first and last layers**  \n  Place the initial convolution\
+    \ near one corner I/O chiplet and the final classifier near another corner, reducing\
+    \ the on\u2011chip+trip length for the entire inference stream without disrupting\
+    \ the overall mapping.\n\n### 3. Data/Signals the Mapper Currently Ignores but\
+    \ Should Use\n\n| Ignored Signal | Description | Why Essential |\n|----------------|-------------|---------------|\n\
+    | **Actual weight count per output\u2011channel slice** | The number of weights\
+    \ associated with a given partition of output channels (depends on filter size\
+    \ and input channels). | The mapper treats capacity in \u201Cweight units\u201D\
+    \ but never knows the real weight cost of an integer channel count, causing the\
+    \ mismatch described above. |\n| **MAC\u2011per\u2011cycle capacity of each chiplet**\
+    \ | The theoretical maximum multiply\u2011accumulate operations per second on\
+    \ the chiplet. | Critical for load balancing; ensures that the assignment of output\
+    \ channels does not create a compute bottleneck. |\n| **Activation buffer size\
+    \ per chiplet** | The amount of on\u2011chip memory available for input feature\
+    \ maps. | When a layer is split, each partition receives a complete input map\
+    \ (or a portion of spatial dimensions if partitioned differently). The mapper\
+    \ must avoid exceeding this buffer to prevent backpressure. |\n| **Full partition\
+    \ map of the previous layer** | The complete set of chiplet IDs and their assigned\
+    \ output\u2011channel slices for the immediately preceding layer. | Allows the\
+    \ mapper to try to place the next layer on exactly the same chiplet set with aligned\
+    \ slices, eliminating inter\u2011layer traffic. |\n| **Layer\u2011pair channel\
+    \ correspondence** | Whether the output channels of layer L exactly match the\
+    \ input channels of layer L+1 (typical for sequential conv/FC layers). | Determines\
+    \ whether channel\u2011aligned co\u2011location is possible and how much communication\
+    \ can be avoided. |\n| **Number of chiplets currently used for a layer** | Real\u2011\
+    time count of assigned partitions during allocation. | Needed to enforce a maximum\
+    \ partition limit and to decide if it\u2019s worth using an additional chiplet\
+    \ versus expanding an existing partition. |\n| **Chiplet\u2011to\u2011chiplet\
+    \ link load estimation** | Number of concurrent flows that will cross each mesh\
+    \ link under the current partial mapping. | Enables avoidance of hotspots; a simple\
+    \ usage counter per link could guide the mapper away from already congested regions.\
+    \ |\n| **Weight\u2011loading footprint (all\u2011at\u2011once)** | Though weights\
+    \ are loaded once, the mapper could favor chiplets that are completely empty for\
+    \ weight\u2011storage reasons, but also ensure that the sum of stored weights\
+    \ does not exceed capacity; this is already checked but rounding violations go\
+    \ unnoticed. |\n| **Rounding error magnitude per layer** | The difference between\
+    \ the mapper\u2011assigned percentage and the actual percentage inferred from\
+    \ the rounded channel count. | Could be used to automatically adjust remaining\
+    \ capacity after partitioning, preventing silent over\u2011allocation. |\n\nBy\
+    \ integrating these signals, the mapper can transform from a blind, greedy nearest\u2011\
+    neighbor engine into a **load\u2011balanced, channel\u2011aligned, capacity\u2011\
+    accurate placement** that dramatically cuts VGG16 inference latency on the 96\u2011\
+    chiplet CMOS mesh."
+  function_name: optimized_mapper_v3
+  improvement_pct:
+    comm_latency: -130.5125417467773
+    compute_latency: 34.85621048337753
+    total_latency: -130.37581432440598
+  iteration: 3
+  metrics:
+    comm_latency: 682873.65
+    compute_latency: 159.7
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_cmos_heavy_optimized_mapper_v3/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 682873.65
+        compute_latency: 159.7
+        total_latency: 683033.35
+    results_label: vgg16_hetero_cmos_heavy_optimized_mapper_v3
+    total_latency: 683033.35
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

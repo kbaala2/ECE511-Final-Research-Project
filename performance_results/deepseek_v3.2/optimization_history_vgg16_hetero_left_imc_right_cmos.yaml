@@ -1,0 +1,216 @@
+baseline_metrics:
+  comm_latency: 296241.43
+  compute_latency: 245.15
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_left_imc_right_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296486.57
+best_metrics:
+  comm_latency: 281756.32
+  compute_latency: 250.63
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_left_imc_right_cmos_improved_balanced_mapper_v1/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: vgg16_hetero_left_imc_right_cmos_improved_balanced_mapper_v1
+  total_latency: 282006.95
+config: vgg16_hetero_left_imc_right_cmos
+history:
+- function_name: improved_balanced_mapper_v1
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the `_nearest_neighbor_mapper_v3` method\
+    \ and the provided CHIPSIM configuration, here are the key weaknesses and improvement\
+    \ opportunities:\n\n## 1. Key Weaknesses of Current Nearest-Neighbor Approach\n\
+    \n### **A. Suboptimal Load Balancing**\n1. **Localized Congestion**: The algorithm\
+    \ places consecutive layers on physically nearby chiplets without considering\
+    \ the collective memory footprint across the entire workload. With VGG16's large\
+    \ layers, this creates \"hot spots\" where early layers consume disproportionate\
+    \ capacity.\n\n2. **No Global Awareness**: Each layer is mapped independently\
+    \ based only on the previous layer's location, ignoring:\n   - Future layer requirements\n\
+    \   - Cumulative communication patterns\n   - Long-term memory fragmentation\n\
+    \n3. **Static Metric Optimization**: The `active_metric` (performance/energy)\
+    \ is evaluated per-chiplet but doesn't consider how chiplet-to-chiplet communication\
+    \ affects the chosen metric.\n\n### **B. Inefficient Memory Utilization**\n1.\
+    \ **Capacity Calculation Mismatch**: The mapper calculates `units_needed_full`\
+    \ per chiplet, but different chiplets have identical CMOS capacities (2.46M weights\
+    \ each). The algorithm doesn't exploit uniform capacity for load balancing.\n\n\
+    2. **Fragmentation**: Small leftover capacities (<10 units threshold) are essentially\
+    \ wasted, reducing effective system capacity by ~4-8% given 96 compute chiplets.\n\
+    \n3. **No Weight Reuse Optimization**: With `weight_stationary: true`, the algorithm\
+    \ doesn't prioritize placing layers with shared weights on the same chiplets.\n\
+    \n### **C. Network Ignorance**\n1. **Mesh Topology Blindness**: The 10\xD710 mesh\
+    \ with 4 corner IO chiplets has specific traffic patterns:\n   - Corner-to-center\
+    \ paths have higher hop counts\n   - Mesh edges create bottlenecks\n   The mapper\
+    \ only uses shortest-path distances, ignoring:\n   - Link contention\n   - Bisection\
+    \ bandwidth\n   - IO chiplet placement (corners only)\n\n2. **Communication Volume\
+    \ Estimation**: The algorithm doesn't estimate inter-chiplet communication volume,\
+    \ which is critical for VGG16's layer-to-layer dependencies.\n\n## 2. Specific\
+    \ Opportunities for Improvement\n\n### **A. Exploit System Configuration Advantages**\n\
+    1. **Homogeneous Compute Array**: 96 identical CMOS chiplets enable:\n   - **Proportional\
+    \ load distribution**: Spread layers evenly rather than nearest-neighbor\n   -\
+    \ **Capacity-aware sorting**: Sort chiplets by available capacity, not just distance\n\
+    \   - **Work stealing**: Underutilized chiplets can take fractions of distant\
+    \ layers\n\n2. **Corner IO Placement**: The 4 corner IO chiplets suggest:\n  \
+    \ - **Edge-aware mapping**: Place communication-intensive layers near relevant\
+    \ IO chiplets\n   - **Input/output layer optimization**: Map first/last layers\
+    \ to appropriate quadrants\n\n### **B. Algorithm Enhancements**\n1. **Lookahead\
+    \ Mapping**:\n   ```python\n   # Instead of greedy nearest-neighbor:\n   def lookahead_mapper(layer_sequence):\n\
+    \       # Evaluate multiple placement options\n       # Consider future layer\
+    \ requirements\n       # Balance current vs future communication\n   ```\n\n2.\
+    \ **Communication-Aware Cost Function**:\n   ```python\n   # Replace simple distance\
+    \ with weighted cost:\n   cost = \u03B1 * distance + \u03B2 * contention + \u03B3\
+    \ * memory_imbalance\n   ```\n\n3. **Layer Affinity Groups**: Group layers with\
+    \ high weight reuse or data dependencies.\n\n## 3. Missing Data/Signals the Mapper\
+    \ Should Use\n\n### **Critical Missing Information:**\n1. **Inter-layer Communication\
+    \ Estimates**: VGG16's layer dimensions determine activation transfer volumes\
+    \ between layers.\n\n2. **Chiplet-to-IO Communication Patterns**: Which IO chiplets\
+    \ handle input/output for which data streams?\n\n3. **Network Load Metrics**:\
+    \ Real-time or estimated link utilization.\n\n4. **Layer Dependency Graph**: Not\
+    \ just sequential mapping but understanding parallelizable branches.\n\n5. **Weight\
+    \ Sharing Information**: Which layers can reuse weights already loaded?\n\n###\
+    \ **Recommended Enhancements:**\n1. **Add Communication Matrix**: Precompute expected\
+    \ activation transfer between each layer pair.\n\n2. **Incorporate Network Simulation**:\
+    \ Use the `network_operation_frequency_hz` and `bits_per_packet` to estimate transfer\
+    \ times.\n\n3. **Implement Contention Modeling**: With `comm_simulator: Garnet`,\
+    \ model network contention during mapping.\n\n4. **Add Spatial Awareness**: Consider\
+    \ mesh XY coordinates, not just hop counts, to avoid edge congestion.\n\n### **Immediate\
+    \ Fix for Current Algorithm:**\n```python\n# In _nearest_neighbor_mapper_v3, replace\
+    \ simple distance sort with:\nchiplet_info.sort(key=lambda x: (\n    x[1],   \
+    \                 # Distance (keep)\n    -x[2],                   # Available\
+    \ memory (keep)\n    occupancy_percentages[x[0]-1],  # Current utilization\n \
+    \   -self._estimate_comm_cost(x[0], layer_mappings)  # Communication cost\n))\n\
+    ```\n\nThe mapper's fundamental weakness is treating each layer in isolation rather\
+    \ than optimizing the entire workload across the homogeneous compute array. Given\
+    \ VGG16's structure and 96 identical CMOS chiplets, a more balanced, capacity-first\
+    \ approach would significantly outperform simple nearest-neighbor placement."
+  function_name: improved_balanced_mapper_v1
+  improvement_pct:
+    comm_latency: 4.889630056133602
+    compute_latency: -2.2353661023862896
+    total_latency: 4.883735543232193
+  iteration: 1
+  metrics:
+    comm_latency: 281756.32
+    compute_latency: 250.63
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_left_imc_right_cmos_improved_balanced_mapper_v1/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 281756.32
+        compute_latency: 250.63
+        total_latency: 282006.95
+    results_label: vgg16_hetero_left_imc_right_cmos_improved_balanced_mapper_v1
+    total_latency: 282006.95
+  outcome: IMPROVED
+- function_name: improved_balanced_mapper_v2
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the `_nearest_neighbor_mapper_v3` algorithm\
+    \ and the specific CHIPSIM configuration with 96 homogeneous CMOS chiplets and\
+    \ VGG16 workload, here are the key weaknesses and improvement strategies:\n\n\
+    ## 1. Key Weaknesses of Current Nearest-Neighbor Approach\n\n### **A. Greedy Sequential\
+    \ Optimization**\n1. **Myopic Decision Making**: Each layer placement depends\
+    \ only on the previous layer's location, creating a chain reaction that can't\
+    \ be undone. With VGG16's 13 convolutional layers, early suboptimal placements\
+    \ compound throughout the network.\n\n2. **No Backtracking**: Once a layer is\
+    \ mapped, the algorithm never reconsidersthe placement even if it causes downstream\
+    \ congestion or fragmentation.\n\n### **B. Homogeneous System Mismatch**\n1. **Wasted\
+    \ Uniformity**: All 96 CMOS chiplets have identical capacity (2.46M weights each),\
+    \ but the algorithm doesn't leverage this for:\n   - Balanced load distribution\n\
+    \   - Symmetric placement patterns\n   - Predictable capacity planning\n\n2. **Corner\
+    \ IO Constraint Ignorance**: With IO chiplets only at corners, the algorithm doesn't\
+    \ optimize for:\n   - Input/output layer placement near appropriate IO chiplets\n\
+    \   - Avoiding traffic bottlenecks at mesh edges\n\n### **C. Memory Fragmentation\
+    \ Amplification**\n```python\n# Critical flaw in capacity allocation:\nunits_needed_for_resources\
+    \ = math.ceil(resources_remaining * units_needed_full / crossbars_required)\n\
+    ```\nThis calculation creates **non-integer fragmentation** that accumulates across\
+    \ layers, especially problematic because:\n- CMOS chiplets store weights discretely\n\
+    - Small leftover capacities (< threshold) become unusable\n- Early layers consume\
+    \ disproportionate capacity due to greedy allocation\n\n## 2. Specific Opportunities\
+    \ Given This Config\n\n### **A. Exploit Mesh Topology Structure**\n1. **Quadrant-Based\
+    \ Mapping**: Divide the 10\xD710 mesh into 4 quadrants (25 chiplets each) centered\
+    \ around IO chiplets:\n   ```python\n   # Assign layers to quadrants based on:\n\
+    \   # 1. Input/output proximity to relevant IO chiplet\n   # 2. Balancing load\
+    \ across quadrants\n   # 3. Minimizing cross-quadrant communication\n   ```\n\n\
+    2. **Column/Row Striping**: For VGG16's sequential layers, use column-major or\
+    \ row-major placement to:\n   - Keep consecutive layers in adjacent chiplets\n\
+    \   - Balance vertical vs horizontal traffic\n   - Avoid diagonal crossings (2-hop\
+    \ vs 1-hop)\n\n### **B. Layer-Aware Capacity Planning**\n1. **Precompute Layer\
+    \ Requirements**: Before mapping, calculate exact weight requirements for each\
+    \ VGG16 layer:\n   - Conv layers: ~3\xD73\xD7input_channels\xD7output_channels\
+    \ weights\n   - FC layers: 4096\xD74096, 4096\xD71000 weights (massive)\n\n2.\
+    \ **Bin Packing Approach**: Treat CMOS chiplets as 2.46M-weight bins:\n   ```python\n\
+    \   # Instead of greedy nearest-neighbor:\n   def bin_pack_layers(layers):\n \
+    \      # Sort layers by weight count (largest first)\n       # Pack full layers\
+    \ into chiplets\n       # Split oversized layers across multiple chiplets\n  \
+    \     # Minimize inter-chiplet communication for splits\n   ```\n\n### **C. Communication\
+    \ Volume Optimization**\n1. **Activation Transfer Awareness**: VGG16 layers produce\
+    \ feature maps sized from 224\xD7224 down to 7\xD77. The mapper should:\n   -\
+    \ Estimate activation transfer volume between layers\n   - Place consecutive layers\
+    \ to minimize transfer distance\xD7volume\n   - Consider feature map dimensions\
+    \ when splitting layers\n\n## 3. Missing Data/Signals the Mapper Should Use\n\n\
+    ### **Critical Missing Signals:**\n1. **Layer Weight Requirements**: The mapper\
+    \ receives `crossbars_required` but doesn't know actual weight counts for CMOS\
+    \ allocation decisions.\n\n2. **Feature Map Dimensions**: Activation sizes determine\
+    \ communication volume but aren't considered.\n\n3. **IO Chiplet Roles**: Which\
+    \ IO chiplets handle input vs output? This affects first/last layer placement.\n\
+    \n4. **Network Congestion**: Real-time or predictive link utilization isn't factored.\n\
+    \n### **Recommended Algorithm Replacement:**\nSince the system is **homogeneous\
+    \ CMOS** with **mesh topology** running **VGG16**, consider replacing nearest-neighbor\
+    \ with:\n\n**Option 1: Capacity-First Balanced Mapper**\n```python\ndef capacity_first_mapper(layer_info,\
+    \ system, ...):\n    # 1. Sort chiplets by available capacity (highest first)\n\
+    \    # 2. Allocate layer to chiplets with most free capacity\n    # 3. Break ties\
+    \ by distance to previous layer\n    # 4. Ensure no chiplet gets >50% more than\
+    \ average load\n```\n\n**Option 2: Mesh-Aware Striping Mapper**\n```python\ndef\
+    \ mesh_striping_mapper(layer_info, system, ...):\n    # 1. Assign layers to chiplets\
+    \ in row-major order\n    # 2. Skip already-full chiplets\n    # 3. For layer\
+    \ splits, use adjacent chiplets in same row\n    # 4. Wrap around to next row\
+    \ when current row fills\n```\n\n**Option 3: Communication-Volume-Aware Mapper**\n\
+    ```python\ndef comm_aware_mapper(layer_info, system, layer_mappings, ...):\n \
+    \   if layer_mappings:  # Not first layer\n        # Calculate activation volume\
+    \ to previous layer\n        prev_layer = layer_mappings[-1]\n        activation_volume\
+    \ = estimate_activation_size(prev_layer)\n        \n        # Weight cost by activation\
+    \ volume\n        chiplet_info.sort(key=lambda x: (\n            activation_volume\
+    \ * distances[x[0]],  # Volume-weighted distance\n            -available_capacity[x[0]]\
+    \  # Then capacity\n        ))\n    else:  # First layer\n        # Place near\
+    \ input IO chiplets\n        # Use corners as starting points\n```\n\n### **Immediate\
+    \ Tactical Improvements:**\n1. **Fix the Fragmentation Calculation**:\n   ```python\n\
+    \   # Current problematic code:\n   units_needed_for_resources = math.ceil(resources_remaining\
+    \ * units_needed_full / crossbars_required)\n   \n   # Better approach for CMOS:\n\
+    \   weights_needed = layer_weights * (percentage_remaining / 100)\n   units_needed_for_resources\
+    \ = math.ceil(weights_needed / weight_units_per_chiplet_capacity)\n   ```\n\n\
+    2. **Add Load Balancing Constraint**:\n   ```python\n   # After each layer allocation,\
+    \ check balance:\n   avg_capacity = sum(remaining_capacity) / len(remaining_capacity)\n\
+    \   for idx in range(len(remaining_capacity)):\n       if remaining_capacity[idx]\
+    \ < 0.5 * avg_capacity:\n           # Avoid further allocation to this chiplet\n\
+    \           # Skip in sorted_chiplets_ids\n   ```\n\n3. **Exploit Mesh Symmetry**:\n\
+    \   ```python\n   # For first layer, start from multiple corners:\n   starting_options\
+    \ = [1, 10, 91, 100]  # Corner chiplets\n   # Choose based on which quadrant has\
+    \ most capacity\n   ```\n\nThe fundamental issue is using a **general-purpose\
+    \ nearest-neighbor algorithm** on a **highly structured problem** (homogeneous\
+    \ mesh running VGG16). A specialized mapper that understands:\n1. CMOS weight\
+    \ storage constraints\n2. Mesh topology traffic patterns  \n3. VGG16's layer progression\
+    \ and communication requirements\n\nwould dramatically outperform the current\
+    \ approach. The mapper should prioritize **balanced capacity utilization** over\
+    \ **minimal distance** for this specific configuration."
+  function_name: improved_balanced_mapper_v2
+  improvement_pct:
+    comm_latency: 0.023521355537607626
+    compute_latency: 0.0
+    total_latency: 0.023498534857745397
+  iteration: 2
+  metrics:
+    comm_latency: 296171.75
+    compute_latency: 245.15
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_left_imc_right_cmos_improved_balanced_mapper_v2/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 296171.75
+        compute_latency: 245.15
+        total_latency: 296416.9
+    results_label: vgg16_hetero_left_imc_right_cmos_improved_balanced_mapper_v2
+    total_latency: 296416.9
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 2
