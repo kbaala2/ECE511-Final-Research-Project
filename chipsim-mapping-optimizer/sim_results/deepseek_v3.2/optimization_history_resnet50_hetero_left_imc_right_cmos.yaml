@@ -1,0 +1,420 @@
+baseline_metrics:
+  comm_latency: 273843.06
+  compute_latency: 519.21
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/resnet50_hetero_left_imc_right_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 274362.27
+best_metrics:
+  comm_latency: 158.76
+  compute_latency: 2.09
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_left_imc_right_cmos_multi_seed_adaptive_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: resnet50_hetero_left_imc_right_cmos_multi_seed_adaptive_mapper
+  total_latency: 160.85
+config: resnet50_hetero_left_imc_right_cmos
+history:
+- error: "Traceback (most recent call last):\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\", line\
+    \ 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n             \
+    \         ^^^^^^^^^^^^\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 51, in run\n    self._run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 122, in _run_simulation\n    self.gm.run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  function_name: capacity_aware_nearest_neighbor_mapper
+  iteration: 1
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- function_name: capacity_aware_nearest_neighbor_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 2
+- change_summary: "## Analysis of Nearest-Neighbor Mapper Weaknesses\n\n### 1. Key\
+    \ Weaknesses of Current Approach\n\n**A. Rigid Linear Search Pattern**\n- The\
+    \ mapper starts from a single chiplet (`starting_chiplet`) and expands outward\
+    \ based on shortest paths\n- Creates **sequential bottlenecks** where all layers\
+    \ map to the same starting region\n- **Problem**: With 96 compute chiplets on\
+    \ a 10\xD710 mesh, this creates severe congestion around the starting chiplet\n\
+    \n**B. Static Distance Metric Ignoring Resource Availability**\n- Sorting prioritizes\
+    \ distance and chiplet metrics (`metric_value`) but **doesn't consider current\
+    \ chiplet capacity**\n- The `avail_memory_list` is used only for initial sorting\
+    \ but **not updated during allocation**\n- **Consequence**: May allocate to distant\
+    \ chiplets while nearby ones have capacity\n\n**C. Poor Handling of Heterogeneous\
+    \ Configurations**\n- The mapper doesn't differentiate between **IMC vs CMOS chiplets**\
+    \ in allocation logic\n- `_calculate_layer_requirements()` returns different units\
+    \ (crossbars vs weights) but allocation treats them uniformly\n- **Issue**: With\
+    \ 96 CMOS compute chiplets (2.46M weights each), weight units \u2260 crossbar\
+    \ units, causing allocation errors\n\n**D. No Load Balancing Across Mesh**\n-\
+    \ Once a chiplet is partially allocated, remaining capacity isn't reconsidered\
+    \ for subsequent layers\n- **Result**: Early layers saturate starting region while\
+    \ distant chiplets remain underutilized\n\n**E. Single-Point Failure Risk**\n\
+    - If starting chiplet fails or gets congested, entire mapping collapses (`\"NO_CHIPLET_CONNECTIONS\"\
+    `)\n- No fallback strategy for alternative paths\n\n### 2. Specific Improvement\
+    \ Opportunities for This Config\n\n**A. Dynamic Capacity-Aware Allocation**\n\
+    ```python\n# Replace static distance sorting with capacity-weighted metric\ndef\
+    \ _capacity_weighted_sort(self, chiplet_ids, avail_memory_list, distances):\n\
+    \    capacity_score = []\n    for chiplet_id in chiplet_ids:\n        idx = chiplet_id\
+    \ - 1\n        capacity = avail_memory_list[idx]\n        distance = distances.get(chiplet_id,\
+    \ math.inf)\n        # Weight by capacity/distance ratio\n        score = capacity\
+    \ / (distance + 1)  # Avoid division by zero\n        capacity_score.append((chiplet_id,\
+    \ score))\n    return sorted(capacity_score, key=lambda x: x[1], reverse=True)\n\
+    ```\n\n**B. Layer-Type Specific Mapping**\n- CMOS chiplets (96 units) should map\
+    \ **weight-intensive layers** (Conv/FC)\n- IMC chiplets (4 units at corners) should\
+    \ map **activation-intensive layers**\n- Add layer-type detection in `_calculate_layer_requirements()`\
+    \ and route accordingly\n\n**C. Parallel Exploration from Multiple Seeds**\n-\
+    \ For 10\xD710 mesh, start from **4 corner I/O chiplets** simultaneously\n- Use\
+    \ **breadth-first expansion** from each corner to utilize entire mesh\n- Implement\
+    \ region-based partitioning:\n```python\nregions = {\n    \"top_left\": chiplets\
+    \ near I/O chiplet at (0,0),\n    \"top_right\": chiplets near I/O chiplet at\
+    \ (0,9),\n    \"bottom_left\": chiplets near I/O chiplet at (9,0),\n    \"bottom_right\"\
+    : chiplets near I/O chiplet at (9,9)\n}\n```\n\n**D. Real-Time Capacity Updates**\n\
+    - After each partial allocation, **recompute `avail_memory_list`**\n- Re-sort\
+    \ chiplets based on updated capacity rather than fixed initial state\n\n**E. Congestion-Aware\
+    \ Routing**\n- Integrate **network load feedback** from `shortest_paths`\n- Penalize\
+    \ paths through already-allocated chiplets\n- Use `preference[\"performance\"\
+    ]` to balance proximity vs load\n\n### 3. Missing Data/Signals the Mapper Should\
+    \ Use\n\n**A. Chiplet Type Differentiation**\n- Current logic treats all compute\
+    \ chiplets uniformly\n- **Missing**: IMC vs CMOS distinction in allocation decisions\n\
+    - **Should use**: `chiplet.type` property to route layer types appropriately\n\
+    \n**B. Network Traffic Load**\n- `shortest_paths` only contains topological distances\n\
+    - **Missing**: Current communication load on links\n- **Should use**: Real-time\
+    \ bandwidth utilization from chiplet network\n\n**C. Layer Dependency Graph**\n\
+    - Mapper processes layers independently\n- **Missing**: Inter-layer communication\
+    \ patterns (skip connections, residuals)\n- **Should use**: Layer adjacency matrix\
+    \ to co-locate dependent layers\n\n**D. Thermal/Power Constraints**\n- No consideration\
+    \ of chiplet power budgets\n- **Missing**: Power consumption per chiplet from\
+    \ workload\n- **Should use**: Power profiles to avoid hotspots in 10\xD710 mesh\n\
+    \n**E. Historical Allocation Patterns**\n- Each mapping starts fresh\n- **Missing**:\
+    \ Learning from previous mapping successes/failures\n- **Should use**: Allocation\
+    \ history to predict optimal starting points\n\n**F. Cross-Chiplet Communication\
+    \ Cost**\n- Assumes all inter-chiplet communication equal\n- **Missing**: Cost\
+    \ of transferring partial results between CMOS vs IMC chiplets\n- **Should use**:\
+    \ Communication cost matrix based on chiplet types\n\n### Recommended Immediate\
+    \ Fixes:\n\n1. **Add chiplet-type awareness** in `_nearest_neighbor_mapper_v3`:\n\
+    ```python\nif chiplet.type == \"CMOS\":\n    # Prioritize for weight-dense layers\n\
+    \    capacity_score *= weight_density_factor\nelif chiplet.type == \"IMC\":\n\
+    \    # Prioritize for activation-dense layers\n    capacity_score *= activation_density_factor\n\
+    ```\n\n2. **Implement multi-start expansion**:\n```python\nstarting_chiplets =\
+    \ [io_chiplet_ids]  # 4 corner I/O chiplets\nfor start_id in starting_chiplets:\n\
+    \    distances = shortest_paths.get(start_id, {})\n    # Allocate proportionally\
+    \ from each starting point\n```\n\n3. **Dynamic capacity re-sorting**:\n```python\n\
+    # After each allocation iteration:\nremaining_capacity = current_available_crossbars.copy()\n\
+    avail_memory_list = [remaining_capacity[i] * chiplet.get_capacity_unit_size()]\n\
+    # Re-sort based on updated availability\n```\n\nThese changes would significantly\
+    \ improve utilization of the 100-chiplet mesh and reduce congestion around single\
+    \ starting points."
+  function_name: capacity_aware_nearest_neighbor_mapper
+  improvement_pct:
+    comm_latency: -52.06955765101369
+    compute_latency: -250.6981760751911
+    total_latency: -52.44544740062107
+  iteration: 1
+  metrics:
+    comm_latency: 416431.93
+    compute_latency: 1820.86
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_left_imc_right_cmos_capacity_aware_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 416431.93
+        compute_latency: 1820.86
+        total_latency: 418252.79
+    results_label: resnet50_hetero_left_imc_right_cmos_capacity_aware_nearest_neighbor_mapper
+    total_latency: 418252.79
+  outcome: NO_IMPROVEMENT
+- function_name: multi_seed_adaptive_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on the analysis and previous optimization attempts, I'll\
+    \ focus on a different strategy that addresses the core weaknesses while leveraging\
+    \ the 10\xD710 mesh topology with 96 CMOS compute chiplets and 4 I/O chiplets.\n\
+    \n## Recommended Optimization Strategy: **Multi-Seed Adaptive Capacity-Aware Mapping**\n\
+    \n### Key Insight from Previous Failures:\nThe previous \"NO_IMPROVEMENT\" result\
+    \ suggests that simple tweaks to the nearest-neighbor approach won't work. We\
+    \ need a fundamentally different allocation strategy that:\n1. **Distributes layers\
+    \ evenly** across the entire mesh (not just from one starting point)\n2. **Considers\
+    \ real-time capacity** during allocation (not just initial state)\n3. **Leverages\
+    \ the mesh structure** with 4 corner I/O chiplets as natural distribution points\n\
+    \n### Implementation Plan:\n\n**Step 1: Quadrant-Based Partitioning**\n```python\n\
+    def _get_quadrant_for_chiplet(self, chiplet_id):\n    \"\"\"\n    Assign chiplets\
+    \ to quadrants based on mesh position.\n    For 10x10 mesh with I/O at corners:\n\
+    \    - Quadrant 0: Top-left (near I/O chiplet at (0,0))\n    - Quadrant 1: Top-right\
+    \ (near I/O chiplet at (0,9))\n    - Quadrant 2: Bottom-left (near I/O chiplet\
+    \ at (9,0))\n    - Quadrant 3: Bottom-right (near I/O chiplet at (9,9))\n    \"\
+    \"\"\n    row = (chiplet_id - 1) // 10  # Assuming 0-indexed mapping\n    col\
+    \ = (chiplet_id - 1) % 10\n    if row < 5:\n        return 0 if col < 5 else 1\n\
+    \    else:\n        return 2 if col < 5 else 3\n```\n\n**Step 2: Multi-Seed BFS\
+    \ Expansion**\n```python\ndef _multi_seed_bfs_mapping(self, model_layer_info,\
+    \ system, preference, \n                           current_available_crossbars,\
+    \ layer_mappings, shortest_paths):\n    \"\"\"\n    Maps layers using BFS expansion\
+    \ from all 4 corner I/O chiplets simultaneously.\n    \"\"\"\n    # Identify the\
+    \ 4 corner I/O chiplets (should be IDs 1, 10, 91, 100 in 10x10 mesh)\n    corner_chiplets\
+    \ = []\n    for idx in range(len(system.chiplets)):\n        chiplet_id = idx\
+    \ + 1\n        if system.is_io_chiplet(chiplet_id):\n            corner_chiplets.append(chiplet_id)\n\
+    \    \n    # Initialize BFS queues for each corner\n    bfs_frontiers = []\n \
+    \   for corner in corner_chiplets:\n        visited = set([corner])\n        queue\
+    \ = [corner]\n        bfs_frontiers.append((corner, queue, visited))\n    \n \
+    \   # Track allocations per quadrant\n    quadrant_allocations = {0: 0, 1: 0,\
+    \ 2: 0, 3: 0}\n    \n    # Main allocation loop - alternate between quadrants\n\
+    \    remaining_capacity = current_available_crossbars.copy()\n    action = [0]\
+    \ * len(system.chiplets)\n    resources_remaining = model_layer_info['crossbars_required']\n\
+    \    \n    while resources_remaining > 0:\n        # Find quadrant with least\
+    \ allocation\n        target_quadrant = min(quadrant_allocations.items(), key=lambda\
+    \ x: x[1])[0]\n        \n        # Get next chiplet from that quadrant's BFS frontier\n\
+    \        chiplet_id = None\n        for corner_id, queue, visited in bfs_frontiers:\n\
+    \            if self._get_quadrant_for_chiplet(corner_id) == target_quadrant and\
+    \ queue:\n                chiplet_id = queue.pop(0)\n                # Add neighbors\
+    \ to queue\n                neighbors = list(system.chiplet_network.neighbors(chiplet_id))\n\
+    \                for neighbor in neighbors:\n                    if neighbor not\
+    \ in visited and not system.is_io_chiplet(neighbor):\n                       \
+    \ visited.add(neighbor)\n                        queue.append(neighbor)\n    \
+    \            break\n        \n        if not chiplet_id or remaining_capacity[chiplet_id-1]\
+    \ <= 0:\n            # Move to next quadrant\n            continue\n         \
+    \   \n        # Allocate to this chiplet (same logic as before but with quadrant\
+    \ tracking)\n        chiplet_idx = chiplet_id - 1\n        available_units = remaining_capacity[chiplet_idx]\n\
+    \        units_needed_full = self._calculate_layer_requirements(model_layer_info,\
+    \ system.chiplets[chiplet_idx])\n        \n        if model_layer_info['crossbars_required']\
+    \ > 0:\n            units_needed = math.ceil(resources_remaining * units_needed_full\
+    \ / model_layer_info['crossbars_required'])\n        else:\n            units_needed\
+    \ = 0\n            \n        if available_units >= units_needed:\n           \
+    \ # Allocate remaining resources\n            remaining_capacity[chiplet_idx]\
+    \ -= units_needed\n            action[chiplet_idx] = 100 - resources_remaining\n\
+    \            resources_remaining = 0\n        else:\n            # Partial allocation\n\
+    \            alloc_percentage = (available_units * 100 / units_needed_full) if\
+    \ units_needed_full > 0 else 0\n            remaining_capacity[chiplet_idx] =\
+    \ 0\n            action[chiplet_idx] = alloc_percentage\n            resources_remaining\
+    \ -= math.ceil(alloc_percentage * model_layer_info['crossbars_required'] / 100)\n\
+    \            quadrant_allocations[target_quadrant] += alloc_percentage\n    \n\
+    \    return remaining_capacity, action, resources_remaining <= 10, None\n```\n\
+    \n**Step 3: Layer-Type Aware Routing**\n```python\ndef _layer_type_aware_sorting(self,\
+    \ chiplet_ids, layer_info, avail_memory_list, distances):\n    \"\"\"\n    Sort\
+    \ chiplets based on layer type suitability.\n    CMOS chiplets better for weight-intensive\
+    \ layers (Conv/FC with many weights)\n    \"\"\"\n    layer_type = layer_info.get('layer_type',\
+    \ '')\n    \n    chiplet_scores = []\n    for chiplet_id in chiplet_ids:\n   \
+    \     idx = chiplet_id - 1\n        chiplet = self.system.chiplets[idx]\n    \
+    \    \n        # Base score: capacity/distance ratio\n        capacity = avail_memory_list[idx]\n\
+    \        distance = distances.get(chiplet_id, math.inf)\n        base_score =\
+    \ capacity / (distance + 1)\n        \n        # Layer-type adjustment\n     \
+    \   if hasattr(chiplet, 'type'):\n            if chiplet.type == 'CMOS' and layer_type\
+    \ in ['conv', 'fc']:\n                # CMOS excels at weight-intensive operations\n\
+    \                base_score *= 1.5\n            elif chiplet.type == 'IMC' and\
+    \ layer_type in ['self_attention']:\n                # IMC better for attention\
+    \ patterns\n                base_score *= 1.2\n        \n        chiplet_scores.append((chiplet_id,\
+    \ base_score))\n    \n    return sorted(chiplet_scores, key=lambda x: x[1], reverse=True)\n\
+    ```\n\n### Why This Approach is Different:\n\n1. **Avoids Single-Point Congestion**:\
+    \ By using 4 starting points and quadrant balancing\n2. **Adapts to Real-Time\
+    \ Capacity**: Tracks allocations per quadrant and dynamically adjusts\n3. **Respects\
+    \ Network Topology**: Uses BFS to naturally expand through the mesh\n4. **Layer-Type\
+    \ Optimization**: Differentiates between CMOS (weight-intensive) and IMC (attention-intensive)\
+    \ layers\n5. **Scalable**: Works for any mesh size with corner I/O chiplets\n\n\
+    ### Implementation Integration:\n\nAdd this as a new mapper function in `ModelMapper`:\n\
+    \n```python\ndef _multi_seed_adaptive_mapper(self, model_layer_info, system, preference,\
+    \ \n                               current_available_crossbars, layer_mappings=None,\
+    \ shortest_paths=None):\n    \"\"\"\n    Multi-seed adaptive mapper for large\
+    \ mesh topologies.\n    \"\"\"\n    if not layer_mappings:\n        # First layer\
+    \ - use quadrant-based allocation\n        return self._multi_seed_bfs_mapping(model_layer_info,\
+    \ system, preference,\n                                           current_available_crossbars,\
+    \ layer_mappings, shortest_paths)\n    else:\n        # Subsequent layers - use\
+    \ dependency-aware mapping\n        # Try to map near previous layer allocations\n\
+    \        return self._dependency_aware_mapping(model_layer_info, system, preference,\n\
+    \                                             current_available_crossbars, layer_mappings,\
+    \ shortest_paths)\n```\n\nThis strategy should distribute layers more evenly across\
+    \ the 10\xD710 mesh, reduce network congestion, and better utilize the 96 CMOS\
+    \ chiplets while respecting the corner I/O locations."
+  function_name: multi_seed_adaptive_mapper
+  improvement_pct:
+    comm_latency: -17.821474095418008
+    compute_latency: 9.683942913272091
+    total_latency: -17.76941851370451
+  iteration: 2
+  metrics:
+    comm_latency: 322645.93
+    compute_latency: 468.93
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_left_imc_right_cmos_multi_seed_adaptive_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 322645.93
+        compute_latency: 468.93
+        total_latency: 323114.85
+    results_label: resnet50_hetero_left_imc_right_cmos_multi_seed_adaptive_mapper
+    total_latency: 323114.85
+  outcome: NO_IMPROVEMENT
+- function_name: multi_seed_adaptive_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Looking at your configuration and the previous optimization attempts,\
+    \ I'll analyze the fundamental weaknesses and propose a different strategy that\
+    \ leverages the specific characteristics of your setup.\n\n## Analysis of Current\
+    \ Weaknesses\n\n**Key Issue**: The nearest-neighbor mapper has a **single-point\
+    \ expansion bias** that's particularly problematic for your 10\xD710 mesh with\
+    \ 96 CMOS compute chiplets. The mapper always starts from either:\n1. The chiplet\
+    \ with most available memory (for first layer)\n2. The chiplet with largest allocation\
+    \ from previous layer (for subsequent layers)\n\nThis creates a **sequential hotspot\
+    \ problem** - layers cluster around initial allocations, causing network congestion\
+    \ and underutilization of distant chiplets.\n\n## Proposed Alternative: **Wavefront\
+    \ Load-Balancing Mapper**\n\nThis approach treats the mesh as a wavefront that\
+    \ propagates allocations systematically across all chiplets, ensuring even distribution.\n\
+    \n```python\ndef _wavefront_load_balancing_mapper(self, model_layer_info, system,\
+    \ preference, \n                                     current_available_crossbars,\
+    \ layer_mappings=None, shortest_paths=None):\n    \"\"\"\n    Maps layers using\
+    \ a wavefront pattern that systematically fills the mesh.\n    For 10x10 mesh\
+    \ with 96 CMOS chiplets, this ensures even distribution.\n    \"\"\"\n    chiplets\
+    \ = system.chiplets\n    num_chiplets = len(chiplets)\n    remaining_capacity\
+    \ = current_available_crossbars.copy()\n    \n    layer_name = model_layer_info['name']\n\
+    \    crossbars_required = model_layer_info['crossbars_required']\n    action =\
+    \ [0] * num_chiplets\n    resources_remaining = crossbars_required\n    \n   \
+    \ # Step 1: Identify available compute chiplets\n    available_chiplet_ids = []\n\
+    \    for idx in range(num_chiplets):\n        chiplet_id = idx + 1\n        if\
+    \ (remaining_capacity[idx] > 0 and \n            not system.is_io_chiplet(chiplet_id)):\n\
+    \            available_chiplet_ids.append(chiplet_id)\n    \n    if not available_chiplet_ids:\n\
+    \        return remaining_capacity, None, True, \"NO_AVAILABLE_CHIPLETS\"\n  \
+    \  \n    # Step 2: Group chiplets by their \"wavefront priority\"\n    # For 10x10\
+    \ mesh, create a priority based on distance from all 4 corners\n    # This creates\
+    \ a center-outward filling pattern\n    wavefront_priorities = self._calculate_wavefront_priorities(available_chiplet_ids)\n\
+    \    \n    # Step 3: Sort chiplets by priority (center first, then outward)\n\
+    \    sorted_chiplets = sorted(wavefront_priorities.items(), key=lambda x: x[1])\n\
+    \    \n    # Step 4: Allocate using round-robin within priority levels\n    #\
+    \ This ensures even distribution across the mesh\n    priority_groups = {}\n \
+    \   for chiplet_id, priority in sorted_chiplets:\n        if priority not in priority_groups:\n\
+    \            priority_groups[priority] = []\n        priority_groups[priority].append(chiplet_id)\n\
+    \    \n    # Process from highest to lowest priority (center to edges)\n    for\
+    \ priority in sorted(priority_groups.keys()):\n        chiplets_in_priority =\
+    \ priority_groups[priority]\n        \n        # Shuffle within priority for randomness,\
+    \ but seeded for reproducibility\n        random.seed(hash(layer_name) % 1000)\n\
+    \        random.shuffle(chiplets_in_priority)\n        \n        # Try to allocate\
+    \ evenly within this priority level\n        for chiplet_id in chiplets_in_priority:\n\
+    \            if resources_remaining <= 0:\n                break\n           \
+    \     \n            chiplet_idx = chiplet_id - 1\n            available_units\
+    \ = remaining_capacity[chiplet_idx]\n            \n            if available_units\
+    \ <= 0:\n                continue\n            \n            # Calculate what\
+    \ percentage of this layer fits here\n            units_needed_full = self._calculate_layer_requirements(\n\
+    \                model_layer_info, chiplets[chiplet_idx]\n            )\n    \
+    \        \n            if units_needed_full <= 0:\n                continue\n\
+    \            \n            if crossbars_required > 0:\n                units_needed_for_resources\
+    \ = math.ceil(\n                    resources_remaining * units_needed_full /\
+    \ crossbars_required\n                )\n            else:\n                units_needed_for_resources\
+    \ = 0\n            \n            # Determine allocation strategy based on preference\n\
+    \            if preference.get(\"performance\", 1) > 0.7:\n                # Performance\
+    \ mode: allocate fully to nearby chiplets first\n                if available_units\
+    \ >= units_needed_for_resources:\n                    remaining_capacity[chiplet_idx]\
+    \ -= units_needed_for_resources\n                    action[chiplet_idx] = 100\
+    \  # Full allocation\n                    resources_remaining = 0\n          \
+    \          break\n                else:\n                    # Partial allocation\n\
+    \                    alloc_percentage = (available_units * 100 / units_needed_full)\n\
+    \                    remaining_capacity[chiplet_idx] = 0\n                   \
+    \ action[chiplet_idx] = alloc_percentage\n                    resources_remaining\
+    \ -= math.ceil(\n                        alloc_percentage * crossbars_required\
+    \ / 100\n                    )\n            else:\n                # Load-balancing\
+    \ mode: distribute evenly\n                target_percentage = 100 / len(available_chiplet_ids)\n\
+    \                units_for_target = math.ceil(\n                    target_percentage\
+    \ * units_needed_full / 100\n                )\n                \n           \
+    \     alloc_units = min(available_units, units_for_target)\n                alloc_percentage\
+    \ = (alloc_units * 100 / units_needed_full)\n                \n              \
+    \  remaining_capacity[chiplet_idx] -= alloc_units\n                action[chiplet_idx]\
+    \ = alloc_percentage\n                resources_remaining -= math.ceil(\n    \
+    \                alloc_percentage * crossbars_required / 100\n               \
+    \ )\n    \n    # Check if allocation succeeded\n    if resources_remaining > 10:\
+    \  # Allow small rounding errors\n        print(f\"\u26A0\uFE0F Layer '{layer_name}'\
+    \ could not be fully mapped. Remaining: {resources_remaining}\")\n        return\
+    \ remaining_capacity, None, True, \"INSUFFICIENT_MEMORY\"\n    \n    # Normalize\
+    \ action percentages\n    total_action = sum(action)\n    if total_action > 0\
+    \ and not math.isclose(total_action, 100, rel_tol=1):\n        # Scale to 100%\n\
+    \        scale_factor = 100 / total_action\n        for i in range(len(action)):\n\
+    \            action[i] *= scale_factor\n    \n    return remaining_capacity, action,\
+    \ False, None\n\ndef _calculate_wavefront_priorities(self, chiplet_ids):\n   \
+    \ \"\"\"\n    Calculate wavefront priorities for chiplets in a mesh.\n    Lower\
+    \ priority = closer to center, gets allocated first.\n    \"\"\"\n    priorities\
+    \ = {}\n    \n    for chiplet_id in chiplet_ids:\n        # Convert to mesh coordinates\
+    \ (0-9, 0-9)\n        row = (chiplet_id - 1) // 10\n        col = (chiplet_id\
+    \ - 1) % 10\n        \n        # Calculate distance from center (4.5, 4.5 for\
+    \ 10x10)\n        center_row, center_col = 4.5, 4.5\n        distance_from_center\
+    \ = math.sqrt(\n            (row - center_row)**2 + (col - center_col)**2\n  \
+    \      )\n        \n        # Also consider distance from all 4 corners\n    \
+    \    # This creates a balanced priority\n        distances_to_corners = [\n  \
+    \          math.sqrt(row**2 + col**2),  # Top-left\n            math.sqrt(row**2\
+    \ + (9-col)**2),  # Top-right\n            math.sqrt((9-row)**2 + col**2),  #\
+    \ Bottom-left\n            math.sqrt((9-row)**2 + (9-col)**2)  # Bottom-right\n\
+    \        ]\n        \n        avg_corner_distance = sum(distances_to_corners)\
+    \ / 4\n        \n        # Combined priority: center-first, but balanced across\
+    \ quadrants\n        priority = distance_from_center * 0.7 + avg_corner_distance\
+    \ * 0.3\n        priorities[chiplet_id] = priority\n    \n    return priorities\n\
+    ```\n\n## Complementary Strategy: **Layer-Affinity Grouping**\n\nAdd this to better\
+    \ handle layer dependencies:\n\n```python\ndef _layer_affinity_mapper(self, model_layer_info,\
+    \ system, preference,\n                          current_available_crossbars,\
+    \ layer_mappings=None, shortest_paths=None):\n    \"\"\"\n    Maps layers considering\
+    \ affinity with previously mapped layers.\n    Groups layers with similar characteristics\
+    \ together.\n    \"\"\"\n    if not layer_mappings:\n        # First layer, use\
+    \ wavefront mapper\n        return self._wavefront_load_balancing_mapper(\n  \
+    \          model_layer_info, system, preference,\n            current_available_crossbars,\
+    \ layer_mappings, shortest_paths\n        )\n    \n    # Analyze current layer\
+    \ characteristics\n    layer_type = model_layer_info.get('layer_type', '')\n \
+    \   macs = model_layer_info.get('total_macs', 0)\n    weights = model_layer_info.get('num_weights',\
+    \ 0)\n    \n    # Find similar previous layers\n    similar_layer_indices = []\n\
+    \    for i, (layer_idx, mappings) in enumerate(layer_mappings):\n        prev_layer_info\
+    \ = self._get_layer_info(layer_idx)  # Need to store layer info\n        if prev_layer_info.get('layer_type')\
+    \ == layer_type:\n            # Check if size is similar (\xB125%)\n         \
+    \   prev_macs = prev_layer_info.get('total_macs', 0)\n            if prev_macs\
+    \ > 0 and abs(macs - prev_macs) / prev_macs < 0.25:\n                similar_layer_indices.append(i)\n\
+    \    \n    if similar_layer_indices:\n        # Try to map near similar layers\n\
+    \        candidate_chiplets = set()\n        for layer_idx in similar_layer_indices:\n\
+    \            _, mappings = layer_mappings[layer_idx]\n            for chiplet_id,\
+    \ percentage in mappings:\n                if percentage > 20:  # Only consider\
+    \ significant allocations\n                    candidate_chiplets.add(chiplet_id)\n\
+    \        \n        # Expand to neighbors\n        expanded_candidates = set(candidate_chiplets)\n\
+    \        for chiplet_id in candidate_chiplets:\n            neighbors = list(system.chiplet_network.neighbors(chiplet_id))\n\
+    \            for neighbor in neighbors:\n                if not system.is_io_chiplet(neighbor):\n\
+    \                    expanded_candidates.add(neighbor)\n        \n        # Filter\
+    \ to available chiplets\n        available_candidates = []\n        for chiplet_id\
+    \ in expanded_candidates:\n            idx = chiplet_id - 1\n            if (current_available_crossbars[idx]\
+    \ > 0 and \n                not system.is_io_chiplet(chiplet_id)):\n         \
+    \       available_candidates.append(chiplet_id)\n        \n        if available_candidates:\n\
+    \            # Use nearest-neighbor but restricted to affinity region\n      \
+    \      return self._restricted_nearest_neighbor(\n                model_layer_info,\
+    \ system, preference,\n                current_available_crossbars, available_candidates,\n\
+    \                layer_mappings, shortest_paths\n            )\n    \n    # No\
+    \ strong affinity found, use wavefront mapper\n    return self._wavefront_load_balancing_mapper(\n\
+    \        model_layer_info, system, preference,\n        current_available_crossbars,\
+    \ layer_mappings, shortest_paths\n    )\n```\n\n## Why This Strategy is Different:\n\
+    \n1. **Systematic Distribution**: The wavefront pattern ensures all chiplets get\
+    \ utilized, not just those near the starting point.\n\n2. **Center-Outward Filling**:\
+    \ By prioritizing center chiplets first, we minimize average communication distance\
+    \ between chiplets.\n\n3. **Adaptive to Preferences**: Can switch between performance\
+    \ mode (localized allocation) and load-balancing mode (even distribution).\n\n\
+    4. **Layer Affinity**: Groups similar layers together to optimize data reuse and\
+    \ reduce communication.\n\n5. **Mesh-Aware**: Specifically designed for your 10\xD7\
+    10 mesh topology with corner I/O chiplets.\n\n## Implementation Steps:\n\n1. Add\
+    \ the `_wavefront_load_balancing_mapper` and `_calculate_wavefront_priorities`\
+    \ methods to `ModelMapper`\n2. Optionally add `_layer_affinity_mapper` for better\
+    \ layer grouping\n3. Update `_get_mapper_function` to use the new mapper:\n```python\n\
+    def _get_mapper_function(self):\n    if self.mapping_function == \"nearest_neighbor_v3\"\
+    :\n        return self._nearest_neighbor_mapper_v3\n    elif self.mapping_function\
+    \ == \"wavefront_balancer\":\n        return self._wavefront_load_balancing_mapper\n\
+    \    elif self.mapping_function == \"layer_affinity\":\n        return self._layer_affinity_mapper\n\
+    \    # ... rest of existing code\n```\n\nThis approach directly addresses the\
+    \ single-point congestion issue while leveraging the regular structure of your\
+    \ 10\xD710 mesh, which should yield better latency results than the previous attempts."
+  function_name: multi_seed_adaptive_mapper
+  improvement_pct:
+    comm_latency: 99.94202518771152
+    compute_latency: 99.59746538009668
+    total_latency: 99.94137313414123
+  iteration: 3
+  metrics:
+    comm_latency: 158.76
+    compute_latency: 2.09
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_left_imc_right_cmos_multi_seed_adaptive_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 158.76
+        compute_latency: 2.09
+        total_latency: 160.85
+    results_label: resnet50_hetero_left_imc_right_cmos_multi_seed_adaptive_mapper
+    total_latency: 160.85
+  outcome: IMPROVED
+max_iterations: 3
+total_iterations: 3

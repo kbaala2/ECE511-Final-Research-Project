@@ -1,0 +1,336 @@
+baseline_metrics:
+  comm_latency: 477933.56
+  compute_latency: 3655.57
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/resnet50_hetero_center_imc/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 481589.13
+best_metrics:
+  comm_latency: 249149.33
+  compute_latency: 3884.59
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_center_imc_corner_first_symmetric_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: resnet50_hetero_center_imc_corner_first_symmetric_mapper
+  total_latency: 253033.92
+config: resnet50_hetero_center_imc
+history:
+- function_name: nearest_neighbor_mapper_v4
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the `_nearest_neighbor_mapper_v3` algorithm\
+    \ and the given CHIPSIM configuration, here are the key weaknesses and improvement\
+    \ opportunities:\n\n## 1. Key Weaknesses of Current Nearest-Neighbor Approach\n\
+    \n### **A. Sequential Layer-to-Layer Chaining Creates Communication Hotspots**\n\
+    The algorithm's fundamental flaw: **each layer maps starting from where the previous\
+    \ layer ended** (`starting_chiplet = last_chiplet`). This creates:\n- **Linear\
+    \ accumulation of communication distance**: Each layer's activations must travel\
+    \ to the next layer's starting chiplet, causing unnecessary hops\n- **Ignorance\
+    \ of future layers**: No lookahead to optimize overall data movement across the\
+    \ entire model\n- **Path-dependent inefficiency**: Early layer placement decisions\
+    \ constrain later layers, potentially forcing distant mapping\n\n### **B. Poor\
+    \ Utilization of Heterogeneous Topology**\nFor your 10\xD710 mesh with 4 corner\
+    \ IO chiplets:\n- **Corner IO chiplets are ignored** (set to 0 capacity), but\
+    \ their placement affects distance calculations\n- **No distinction between horizontal/vertical\
+    \ links** - all hops treated equally, but mesh networks often have contention\
+    \ patterns\n- **Center vs. edge compute chiplets** have different connectivity\
+    \ (center: 4 neighbors, edges: 3, corners: 2), but algorithm doesn't exploit this\n\
+    \n### **C. Memory-Agnostic Weight Assignment**\nDespite having 96 CMOS chiplets\
+    \ with **2.46M weight capacity each**:\n- **Proportional allocation ignores weight\
+    \ reuse**: If layer requires X% of a chiplet, it takes X% of weight capacity regardless\
+    \ of actual weight sharing opportunities\n- **No weight replication consideration**:\
+    \ Could replicate frequently used weights to reduce communication\n- **Single\
+    \ allocation strategy**: All weights loaded \"all_at_once\" (per config), but\
+    \ mapper doesn't optimize for this\n\n### **D. Suboptimal Tie-breaking and Sorting**\n\
+    ```python\nchiplet_info.sort(key=lambda x: (x[1], -x[2], -x[3]))\n```\nPrioritizes:\n\
+    1. Distance (good)\n2. Available memory (descending - good)\n3. Performance metric\
+    \ (descending)\n\n**Weaknesses**:\n- No consideration for **contention** (how\
+    \ many other layers use same chiplet)\n- No **load balancing** across the mesh\n\
+    - Performance metric (`active_metric`) defaults to \"performance\" with no chiplet-specific\
+    \ differentiation in current implementation\n\n## 2. Specific Opportunities for\
+    \ Improvement\n\n### **A. Layer Graph Optimization (Critical Fix)**\n**Current**:\
+    \ Sequential chain `layer_N \u2192 layer_N+1`\n**Better**: Map based on **dataflow\
+    \ graph** of the model:\n- ResNet50 has skip connections - current algorithm ignores\
+    \ these\n- Could compute **total communication volume** between layers and place\
+    \ communicating layers close\n- Opportunity: Use `workload_resnet50.csv` to understand\
+    \ layer dependencies\n\n### **B. Exploit Mesh Topology Characteristics**\n```python\n\
+    # Current distance calculation uses shortest_paths\ndistance = distances.get(chiplet_id,\
+    \ math.inf)\n```\n**Improvements**:\n1. **Weight diagonal movement** more than\
+    \ horizontal/vertical (if network contention varies)\n2. **Prefer center chiplets**\
+    \ for layers with high fan-out (more equidistant to others)\n3. **Corner avoidance**:\
+    \ Place compute-intensive layers away from IO corners to reduce contention\n\n\
+    ### **C. Batch Processing of Layers**\n**Instead of sequential mapping**, consider:\n\
+    1. **Group layers** by type/size (all conv3\xD73 layers together)\n2. **Place\
+    \ groups** strategically across mesh\n3. **Allow layer reordering** if model permits\
+    \ (some DNNs have flexible execution order)\n\n### **D. Memory-Aware Weight Distribution**\n\
+    For **2.46M weight capacity per CMOS chiplet**:\n1. **Replicate small, frequently-used\
+    \ weights** (e.g., classifier layer) across multiple chiplets\n2. **Cluster weights\
+    \ by access pattern** - weights accessed together should be on same/similar chiplets\n\
+    3. **Consider weight stationary optimization** (enabled in config) - mapper should\
+    \ maximize weight locality\n\n## 3. What the Mapper Currently Ignores (But Should\
+    \ Use)\n\n### **A. Network Congestion Model**\nThe mapper has **no congestion\
+    \ awareness**:\n- Uses `shortest_paths` (hop count only)\n- Should incorporate:\
+    \ **Link utilization**, **contention hotspots**, **injection rate limits** (0.0\
+    \ in config means unlimited?)\n\n### **B. Workload Communication Patterns**\n\
+    `workload_resnet50.csv` likely contains:\n- Layer dependencies\n- Activation sizes\
+    \ between layers\n- Computation patterns\n\n**Current mapper ignores all of this**,\
+    \ using only per-layer resource requirements.\n\n### **C. Heterogeneous Performance\
+    \ Characteristics**\nAlthough config mentions `hetero_center_imc`, the mapper\
+    \ treats all compute chiplets identically except for:\n- Available capacity\n\
+    - Distance metric\n- Generic \"performance\" attribute\n\n**Missing**: Different\
+    \ compute capabilities, energy profiles, or specialized units.\n\n### **D. Activation\
+    \ Data Movement Costs**\n**Critical oversight**: The mapper minimizes **weight\
+    \ placement distance** but:\n- **Activations** typically dominate communication\
+    \ volume in DNN inference\n- ResNet50 has **feature maps** passed between layers\n\
+    - Current algorithm doesn't consider **activation sizes** when placing layers\n\
+    \n---\n\n## **Highest-Impact Recommendation**\n\nImplement **lookahead optimization**:\n\
+    \n```python\ndef _optimized_nearest_neighbor_with_lookahead(self, model_layers,\
+    \ system, lookahead_window=3):\n    # Instead of layer-by-layer, consider window\
+    \ of upcoming layers\n    # Place current layer considering where NEXT lookahead_window\
+    \ layers would ideally go\n    # Use activation sizes from workload file to estimate\
+    \ communication costs\n```\n\nThis would address the fundamental chaining problem\
+    \ while being computationally feasible. Even `lookahead_window=2` would significantly\
+    \ reduce the sequential chaining penalty.\n\n**Secondary quick win**: Modify sorting\
+    \ to prefer **high-degree chiplets** (center of mesh) for layers with high communication\
+    \ to subsequent layers. This can be inferred from layer type and size in ResNet50\
+    \ (e.g., transition layers should be centrally located)."
+  function_name: nearest_neighbor_mapper_v4
+  improvement_pct:
+    comm_latency: 44.402851726922044
+    compute_latency: 12.906331981059047
+    total_latency: 44.16377504201559
+  iteration: 1
+  metrics:
+    comm_latency: 265717.43
+    compute_latency: 3183.77
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_center_imc_nearest_neighbor_mapper_v4/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 265717.43
+        compute_latency: 3183.77
+        total_latency: 268901.19
+    results_label: resnet50_hetero_center_imc_nearest_neighbor_mapper_v4
+    total_latency: 268901.19
+  outcome: IMPROVED
+- function_name: nearest_neighbor_mapper_v5
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the `_nearest_neighbor_mapper_v3` algorithm\
+    \ and the CHIPSIM configuration, here are the key weaknesses and improvement opportunities:\n\
+    \n## 1. Key Weaknesses of Current Nearest-Neighbor Approach\n\n### **A. Greedy\
+    \ Sequential Chaining with No Global Optimization**\nThe algorithm processes layers\
+    \ **sequentially in fixed order**, starting each layer from where the previous\
+    \ one ended. This creates:\n- **Path dependency trap**: Early placement decisions\
+    \ (often on arbitrary starting chiplets) constrain all subsequent layers\n- **No\
+    \ backtracking**: Once a layer is placed, it's never reconsidered, even if it\
+    \ creates poor placements later\n- **No global cost minimization**: Only optimizes\
+    \ individual layer placement, not total network communication\n\n### **B. Distance-Based\
+    \ Sorting with Multiple Tie-breaking Issues**\n```python\nchiplet_info.sort(key=lambda\
+    \ x: (x[1], -x[2], -x[3]))\n```\nThe sorting prioritizes: distance \u2192 available\
+    \ memory \u2192 performance metric\n\n**Problems:**\n1. **Available memory tie-breaker\
+    \ can be counterproductive**: Prefers chiplets with most free capacity, potentially\
+    \ creating fragmentation\n2. **No load balancing consideration**: May pack layers\
+    \ onto a few chiplets while leaving others underutilized\n3. **Performance metric\
+    \ undefined**: `active_metric` defaults to \"performance\" but chiplet network\
+    \ nodes likely don't have this attribute\n\n### **C. Ignoring Activation Communication\
+    \ Costs**\nThe mapper considers only:\n- Distance between weight placements\n\
+    - Memory capacity utilization\n\n**Critical omission:** **Activation data movement\
+    \ costs** between layers, which often dominate DNN inference communication. For\
+    \ ResNet50:\n- Feature maps between layers are large (especially in early layers)\n\
+    - Skip connections create additional communication paths\n- No consideration of\
+    \ activation sizes from `workload_resnet50.csv`\n\n### **D. Proportional Allocation\
+    \ with Rounding Errors**\nThe algorithm allocates weights proportionally: `units_needed_for_resources\
+    \ = math.ceil(resources_remaining * units_needed_full / crossbars_required)`\n\
+    \n**Issues:**\n1. **Cascading rounding errors**: Small rounding at each layer\
+    \ accumulates\n2. **Inconsistent with partitioner**: Mapper uses continuous percentages,\
+    \ partitioner uses discrete output channels\n3. **Fragmentation**: May leave unusable\
+    \ small capacity fragments on chiplets\n\n### **E. Topology-Agnostic for Mesh\
+    \ Networks**\nDespite using a 10\xD710 mesh:\n- **All hops treated equally** (Manhattan\
+    \ distance)\n- **No congestion modeling** - Garnet network simulator will show\
+    \ contention, but mapper ignores it\n- **No exploitation of mesh regularity**\
+    \ for predictable communication patterns\n\n## 2. Specific Opportunities for Improvement\n\
+    \n### **A. Layer Grouping and Reordering Strategy**\n**Instead of sequential mapping**,\
+    \ implement:\n```python\n# Group layers by communication intensity\ndef _group_layers_by_activation_volume(model_layers,\
+    \ workload_data):\n    # Use workload.csv to find layers with high activation\
+    \ transfer\n    # Group communicating layers together for co-location\n```\n\n\
+    **For ResNet50 specifically:**\n- Group conv layers within same residual block\n\
+    - Place shortcut (skip connection) layers close to their counterparts\n- Identify\
+    \ bottleneck layers (1\xD71 convs) that have different communication patterns\n\
+    \n### **B. Center-Outward Placement Strategy**\nGiven 4 corner IO chiplets and\
+    \ 96 compute chiplets in a mesh:\n- **Place early layers near center** (equidistant\
+    \ to all IO corners)\n- **Place later layers outward** toward IO for output retrieval\n\
+    - **Exploit mesh symmetry**: Use quadrants for parallel processing\n\n### **C.\
+    \ Weight Stationary Optimization**\nWith `weight_stationary: true` in config:\n\
+    - **Maximize weight reuse** on same chiplets across multiple layers\n- **Identify\
+    \ shared weights** (not applicable to ResNet50 but good for future)\n- **Batch\
+    \ weight loading** optimization for `weight_loading_strategy: all_at_once`\n\n\
+    ### **D. Contention-Aware Placement**\nEven simple heuristics help:\n```python\n\
+    # Track chiplet communication load\nchiplet_comm_load = np.zeros(num_chiplets)\n\
+    \n# When placing layer, prefer chiplets with lower communication load\n# Estimate\
+    \ load from activation sizes to subsequent layers\n```\n\n## 3. What the Mapper\
+    \ Currently Ignores (But Should Use)\n\n### **A. Workload Activation Sizes**\n\
+    `workload_resnet50.csv` contains:\n- Layer-to-layer activation transfer sizes\n\
+    - Dependency graph (which layers communicate)\n- **Current mapper ignores all\
+    \ of this**\n\n### **B. Network Contention Information**\nFrom the Garnet network\
+    \ simulator:\n- Link utilization patterns\n- Hotspot locations\n- Injection rate\
+    \ limits (though set to 0.0 here)\n\n### **C. Layer Compute Intensity vs. Communication\
+    \ Patterns**\nDifferent layer types have different characteristics:\n- **Early\
+    \ conv layers**: Large activations, high communication\n- **Depthwise convs**:\
+    \ Lower communication\n- **Fully-connected layers**: All-to-all communication\
+    \ pattern\n\n### **D. Chiplet Neighborhood Utilization**\nNo consideration of:\n\
+    - **Neighborhood capacity** - placing a layer might block future placement in\
+    \ adjacent chiplets\n- **Communication locality** - layers that communicate should\
+    \ be in same neighborhood, not just on same chiplet\n\n---\n\n## **Recommended\
+    \ Optimization Strategy**\n\nImplement **Contention-Aware Weighted Cost Placement**:\n\
+    \n```python\ndef _weighted_cost_mapper(self, model_layer_info, previous_layer_placement):\n\
+    \    # Cost = \u03B1 \xD7 distance + \u03B2 \xD7 contention_estimate + \u03B3\
+    \ \xD7 fragmentation_penalty\n    \n    # 1. Distance component: current shortest_paths\n\
+    \    # 2. Contention estimate: based on chiplet's current communication load\n\
+    \    # 3. Fragmentation penalty: discourage leaving small unusable capacity\n\
+    \    \n    # For ResNet50: Also consider skip connection distances\n    # Place\
+    \ residual block layers as a group\n```\n\n**Key modifications for immediate improvement:**\n\
+    \n1. **Add activation communication cost** to distance calculation\n2. **Implement\
+    \ lookahead** (2-3 layers) to avoid myopic decisions  \n3. **Balance load across\
+    \ mesh** using chiplet degree (center vs edge)\n4. **Batch process related layers**\
+    \ (residual blocks together)\n\n**For your specific 10\xD710 mesh with corner\
+    \ IO:**\n- Initialize placement from center (chiplet ~55) rather than arbitrary\
+    \ starting point\n- Spread compute-intensive layers across mesh to utilize all\
+    \ links\n- Reserve edge chiplets for layers with lower fan-out\n\nThis approach\
+    \ addresses the fundamental sequential chaining problem while being computationally\
+    \ feasible and leveraging the mesh topology characteristics."
+  function_name: nearest_neighbor_mapper_v5
+  improvement_pct:
+    comm_latency: 10.910039462388871
+    compute_latency: 85.36726146674802
+    total_latency: 11.475217474281454
+  iteration: 2
+  metrics:
+    comm_latency: 425790.82
+    compute_latency: 534.91
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_center_imc_nearest_neighbor_mapper_v5/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 425790.82
+        compute_latency: 534.91
+        total_latency: 426325.73
+    results_label: resnet50_hetero_center_imc_nearest_neighbor_mapper_v5
+    total_latency: 426325.73
+  outcome: NO_IMPROVEMENT
+- function_name: corner_first_symmetric_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Given the previous failed optimization attempts that focused on\
+    \ lookahead and contention-aware placement but worsened latency (268K \u2192 426K),\
+    \ we need a fundamentally different strategy. The issue appears to be that more\
+    \ sophisticated heuristics introduced overhead or made poor tradeoffs. Let's reconsider\
+    \ the core problems and try a simpler, more targeted approach.\n\n## 1. Key Weaknesses\
+    \ of Current Nearest-Neighbor Approach (Re-evaluated)\n\n### **A. Sequential Chaining\
+    \ is Actually NOT the Main Problem**\nThe previous analysis assumed chaining was\
+    \ bad, but **for ResNet50, sequential chaining might be optimal** since layers\
+    \ execute sequentially (except skip connections). The real issue is:\n\n**Wrong\
+    \ starting point selection**: The algorithm chooses starting chiplet based on\
+    \ available memory (for first layer) or previous layer location. This creates:\n\
+    - **First layer placement randomness**: No consideration of I/O locations or global\
+    \ optimization\n- **Poor skip connection handling**: Residual blocks have parallel\
+    \ paths that need proximity, but algorithm treats them as sequential\n\n### **B.\
+    \ Memory-Centric Sorting Backfires**\n```python\nchiplet_info.sort(key=lambda\
+    \ x: (-x[1], -x[2]))  # For first layer: available memory first\nchiplet_info.sort(key=lambda\
+    \ x: (x[1], -x[2], -x[3]))  # For subsequent: distance, then available memory\n\
+    ```\n**Flaw**: Filling the chiplet with most available memory first causes:\n\
+    - **Heterogeneous fragmentation**: Some chiplets become packed, others nearly\
+    \ empty\n- **Poor load balancing**: Uneven compute distribution across mesh\n\
+    - **Inefficient network utilization**: Concentrated communication paths\n\n###\
+    \ **C. Ignoring ResNet50's Residual Structure**\nThe mapper treats ResNet50 as\
+    \ a linear chain, but it has:\n- **Skip connections** that need short-distance\
+    \ communication\n- **Bottleneck blocks** (1\xD71 convs) with different communication\
+    \ patterns\n- **Stage transitions** where feature map sizes change dramatically\n\
+    \n### **D. Weight Allocation Proportionality Error**\n```python\nif crossbars_required\
+    \ > 0:\n    units_needed_for_resources = math.ceil(resources_remaining * units_needed_full\
+    \ / crossbars_required)\n```\nThis assumes **linear scaling** of weights with\
+    \ \"crossbars_required\" (a proxy for compute), but:\n- Different layer types\
+    \ have different weight-to-compute ratios\n- Small layers may get fragmented across\
+    \ too many chiplets\n\n## 2. Specific Opportunities for THIS Configuration\n\n\
+    ### **A. Exploit the 4 Corner IO Pattern**\nWith IO at corners (0,0), (0,9), (9,0),\
+    \ (9,9) on a 10\xD710 mesh:\n- **Input layer should be near an IO corner** (not\
+    \ center!)\n- **Output layer should be near an IO corner** (possibly different\
+    \ one)\n- **Intermediate layers should minimize total IO distance sum**\n\n###\
+    \ **B. CMOS Compute Heterogeneity Clarification**\nThe mapping file mentions `hetero_center_imc`\
+    \ but config shows 96 CMOS chiplets. Need to check if:\n- All CMOS chiplets are\
+    \ identical (likely)\n- Or there's hidden heterogeneity not exposed to mapper\n\
+    \n### **C. Simple Symmetry Exploitation**\nFor a 10\xD710 mesh with corner IO:\n\
+    - **Quadrant-based partitioning**: Split workload into 4 quadrants, each served\
+    \ by nearest IO\n- **Mirror placement**: Place symmetric layers in symmetric positions\n\
+    \n## 3. What the Mapper Should Actually Use\n\n### **A. Layer Characteristics\
+    \ from Model Definition**\nThe mapper receives `model_layer_info` but doesn't\
+    \ differentiate:\n- **Conv vs FC vs Attention** layers have different communication\
+    \ patterns\n- **Kernel size** affects weight reuse locality\n- **Stride** affects\
+    \ activation reduction\n\n### **B. Residual Block Awareness**\nEven without full\
+    \ dependency graph, we can identify residual blocks by:\n- Layer naming patterns\
+    \ in ResNet50\n- Input/output channel matching\n- Skip connection presence\n\n\
+    ### **C. Corner IO Distance Matrix**\nPrecompute distances **to all 4 IO chiplets**,\
+    \ not just to previous layer:\n```python\ndistance_to_nearest_io = min(distance_to_io1,\
+    \ distance_to_io2, ...)\ndistance_to_all_io_sum = sum(distances_to_all_io)\n```\n\
+    \n---\n\n## **NEW OPTIMIZATION STRATEGY: Corner-First Symmetric Placement**\n\n\
+    Instead of complex lookahead or contention modeling (which failed), implement:\n\
+    \n### **Strategy 1: IO-Proximity Weighted Placement**\n```python\ndef _corner_aware_mapper_v4(self,\
+    \ model_layer_info, ...):\n    # For each chiplet, compute: distance_to_previous_layer\
+    \ AND distance_to_nearest_IO\n    \n    # Early layers (first 10%): weight IO\
+    \ distance heavily (input from sensors)\n    # Middle layers (80%): weight previous\
+    \ layer distance normally  \n    # Final layers (last 10%): weight IO distance\
+    \ heavily again (output to actuators)\n    \n    # Adjust weights based on layer\
+    \ position in network\n```\n\n### **Strategy 2: Quadrant-Based Load Balancing**\n\
+    ```python\n# Divide mesh into 4 quadrants around center\nquadrants = {\n    'NW':\
+    \ chiplets with x<5, y<5,\n    'NE': chiplets with x>=5, y<5,\n    'SW': chiplets\
+    \ with x<5, y>=5,\n    'SE': chiplets with x>=5, y>=5\n}\n\n# Assign each residual\
+    \ block to a quadrant\n# Place layers within block in same quadrant\n# Balance\
+    \ compute across quadrants\n```\n\n### **Strategy 3: Skip Connection Optimization**\n\
+    ```python\n# Detect residual blocks (consecutive conv layers with same in/out\
+    \ channels)\n# Ensure skip connection layers are placed:\n# 1. Same chiplet if\
+    \ possible\n# 2. Adjacent chiplets if not\n# 3. Same quadrant as minimum\n```\n\
+    \n### **Strategy 4: Reverse Order Placement**\nPrevious attempts started at input.\
+    \ Try **starting at output and working backward**:\n- Place classifier near output\
+    \ IO corner\n- Work backward through network\n- Residual blocks naturally cluster\
+    \ when placed backward\n\n---\n\n## **Implementation Priorities**\n\n1. **Fix\
+    \ first layer placement**: Start near an IO chiplet, not based on available memory\n\
+    2. **Add residual block detection**: Group 2-3 layers that form a block\n3. **Balance\
+    \ across mesh quadrants**: Simple round-robin across 4 quadrants\n4. **Output\
+    \ layer placement**: Ensure near an IO chiplet\n\n**Minimal change with maximum\
+    \ impact**:\n```python\n# In _nearest_neighbor_mapper_v3, modify starting_chiplet\
+    \ selection:\nif not layer_mappings:  # First layer\n    # Instead of choosing\
+    \ based on available memory\n    # Choose chiplet closest to an IO chiplet (e.g.,\
+    \ near corner)\n    io_chiplets = [1, 10, 91, 100]  # For 10x10 mesh corners\n\
+    \    # Find compute chiplet with min distance to any IO\n    starting_chiplet\
+    \ = min(available_chiplet_ids, \n                          key=lambda cid: min(shortest_paths[cid][io]\
+    \ for io in io_chiplets))\n```\n\nThis addresses the most glaring issue: first\
+    \ layer placed arbitrarily far from IO, forcing long-distance activation movement\
+    \ for the entire inference pipeline.\n\n**Second simple fix**: When placing layers,\
+    \ prefer chiplets with **moderate available memory** (not maximum) to avoid fragmentation:\n\
+    ```python\n# Instead of: chiplet_info.sort(key=lambda x: (x[1], -x[2], -x[3]))\n\
+    # Use: chiplet_info.sort(key=lambda x: (x[1], -abs(x[2] - ideal_memory), -x[3]))\n\
+    # where ideal_memory = total_capacity * 0.7 (aim for 70% utilization)\n```\n\n\
+    These two minimal changes should significantly reduce latency without the complexity\
+    \ that caused regression in previous attempts."
+  function_name: corner_first_symmetric_mapper
+  improvement_pct:
+    comm_latency: 47.86946327853604
+    compute_latency: -6.264960047270329
+    total_latency: 47.45854832728471
+  iteration: 3
+  metrics:
+    comm_latency: 249149.33
+    compute_latency: 3884.59
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_center_imc_corner_first_symmetric_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 249149.33
+        compute_latency: 3884.59
+        total_latency: 253033.92
+    results_label: resnet50_hetero_center_imc_corner_first_symmetric_mapper
+    total_latency: 253033.92
+  outcome: IMPROVED
+max_iterations: 3
+total_iterations: 3

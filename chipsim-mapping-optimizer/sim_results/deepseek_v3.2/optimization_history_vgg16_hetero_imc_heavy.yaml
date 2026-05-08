@@ -1,0 +1,323 @@
+baseline_metrics:
+  comm_latency: 296241.43
+  compute_latency: 242.71
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_imc_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296484.14
+best_metrics:
+  comm_latency: 272206.75
+  compute_latency: 11526.32
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_imc_heavy_topology_aware_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: vgg16_hetero_imc_heavy_topology_aware_mapper
+  total_latency: 283733.07
+config: vgg16_hetero_imc_heavy
+history:
+- function_name: topology_aware_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the nearest-neighbor mapper v3 and the\
+    \ provided CHIPSIM configuration, here are the key weaknesses and improvement\
+    \ opportunities:\n\n## 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\
+    \n### A. **Oversimplified Distance Metric**\n- **Problem**: Uses only hop count\
+    \ (network distance) without considering:\n  - Network congestion patterns (IO\
+    \ chiplets at corners on a 10x10 mesh)\n  - Link bandwidth variations\n  - Actual\
+    \ communication volume between layers\n  - Network topology asymmetry (corners\
+    \ vs. center)\n\n- **Impact**: In a 10x10 mesh with IO chiplets at corners, this\
+    \ can lead to:\n  - Bottlenecks around corner IO chiplets\n  - Suboptimal placement\
+    \ for layers with high inter-layer communication\n  - Poor load balancing across\
+    \ network bisections\n\n### B. **Memory-Agnostic Layer Requirements Calculation**\n\
+    - **Problem**: The `_calculate_layer_requirements` doesn't account for:\n  - Different\
+    \ memory organizations between CMOS (2.46M weights) and IMC chiplets\n  - Activation\
+    \ memory requirements (only weights considered)\n  - Data reuse patterns (convolutional\
+    \ vs. FC layers)\n  \n- **Impact**: With 96 CMOS compute chiplets:\n  - Inefficient\
+    \ weight distribution (CMOS: 2.46M weights = ~0.77MB at 8-bit)\n  - No consideration\
+    \ for activation memory which can dominate for CNN layers\n  - Potential memory\
+    \ fragmentation\n\n### C. **Sequential Greedy Allocation**\n- **Problem**: Processes\
+    \ chiplets in sorted distance order until layer requirements met:\n  - No global\
+    \ optimization across multiple layers\n  - Can't backtrack to find better placements\n\
+    \  - Fails to consider inter-layer dependencies\n\n- **Impact**: For VGG16 (deep\
+    \ CNN):\n  - Sequential layers placed far apart increasing communication\n  -\
+    \ No consideration for pipelining opportunities\n  - Poor locality for weight\
+    \ reuse between layers\n\n### D. **Fixed Layer Partitioning Strategy**\n- **Problem**:\
+    \ Always partitions along output channels dimension:\n  - Not optimal for all\
+    \ layer types\n  - Ignores input channel partitioning opportunities\n  - No hybrid\
+    \ partitioning strategies\n\n- **Impact**: For convolutional layers:\n  - Forces\
+    \ all-or-nothing weight partitioning\n  - No consideration for filter/activation\
+    \ partitioning tradeoffs\n  - Inefficient for layers with small output channels\n\
+    \n### E. **Ignoring Performance Metrics**\n- **Problem**: The `active_metric`\
+    \ selection is simplistic:\n  - Performance/energy efficiency treated as binary\n\
+    \  - No multi-objective optimization\n  - Metrics don't influence actual placement\
+    \ decisions meaningfully\n\n## 2. Specific Improvement Opportunities for This\
+    \ Config\n\n### A. **Topology-Aware Mapping**\nGiven the 10x10 mesh with 4 corner\
+    \ IO chiplets:\n1. **Consider network bisection bandwidth**: Place communicating\
+    \ layers closer to reduce cross-mesh traffic\n2. **Cluster related layers**: Group\
+    \ early CNN layers near one IO chiplet, later layers near another\n3. **Use IO\
+    \ chiplet proximity**: Map input/output-intensive layers closer to appropriate\
+    \ IO chiplets\n\n### B. **Memory-Capacity-Aware Placement**\nFor 96 CMOS chiplets\
+    \ (2.46M weights each):\n1. **Track activation memory**: Add activation memory\
+    \ requirements to capacity calculations\n2. **Consider data locality**: Place\
+    \ layers that share weights or activations nearby\n3. **Balance memory utilization**:\
+    \ Prevent memory fragmentation across chiplets\n\n### C. **Communication-Aware\
+    \ Optimization**\nFor VGG16 workload:\n1. **Analyze layer dependencies**: Use\
+    \ workload data to identify high-communication pairs\n2. **Co-place communicating\
+    \ layers**: Prioritize placing dependent layers on same or adjacent chiplets\n\
+    3. **Consider activation sizes**: Large activations (early conv layers) need more\
+    \ careful placement\n\n### D. **Advanced Partitioning Strategies**\n1. **Hybrid\
+    \ partitioning**: Combine output-channel and input-channel partitioning\n2. **Dynamic\
+    \ partitioning**: Choose partition dimension based on layer characteristics\n\
+    3. **Consider tiling**: For very large layers, use 2D partitioning across chiplets\n\
+    \n## 3. Critical Data/Signals Currently Ignored\n\n### **Workload-Specific Information:**\n\
+    - Inter-layer communication volumes (not in current metrics)\n- Activation sizes\
+    \ between layers\n- Temporal execution patterns (parallel vs sequential layers)\n\
+    \n### **Network State Information:**\n- Current network congestion/traffic patterns\n\
+    - Link utilization statistics\n- Temperature/thermal constraints\n\n### **Hardware\
+    \ Heterogeneity Details:**\n- Different CMOS chiplet capabilities (not all 96\
+    \ may be identical)\n- IO chiplet bandwidth limitations\n- Memory hierarchy details\
+    \ (cache sizes, bandwidth)\n\n### **Runtime Performance Data:**\n- Actual execution\
+    \ times from previous mappings\n- Power consumption patterns\n- Failure/error\
+    \ rates\n\n## Recommended Improvements for This Specific Configuration:\n\n1.\
+    \ **Add communication cost modeling**: Augment distance metric with estimated\
+    \ communication volume\n2. **Implement look-ahead optimization**: Consider next\
+    \ layer's requirements when placing current layer\n3. **Add memory fragmentation\
+    \ prevention**: Track free memory blocks, not just total capacity\n4. **Use workload\
+    \ profiling**: Pre-analyze VGG16 to identify critical communication paths\n5.\
+    \ **Implement iterative refinement**: Allow re-mapping of already-placed layers\
+    \ if beneficial\n\nThe current mapper is fundamentally limited by its greedy,\
+    \ distance-only approach. For large-scale systems like this 100-chiplet mesh running\
+    \ complex models like VGG16, a more sophisticated optimization-based approach\
+    \ would provide significant performance improvements."
+  function_name: topology_aware_mapper
+  improvement_pct:
+    comm_latency: 8.113206852937482
+    compute_latency: -4649.009105516872
+    total_latency: 4.300759561708767
+  iteration: 1
+  metrics:
+    comm_latency: 272206.75
+    compute_latency: 11526.32
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_imc_heavy_topology_aware_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 272206.75
+        compute_latency: 11526.32
+        total_latency: 283733.07
+    results_label: vgg16_hetero_imc_heavy_topology_aware_mapper
+    total_latency: 283733.07
+  outcome: IMPROVED
+- function_name: communication_aware_clustered_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the mapper code and your configuration,\
+    \ here are the **core weaknesses** and a **different optimization strategy**:\n\
+    \n## 1. Key Weaknesses of Current Nearest-Neighbor Mapper\n\n### **Fundamental\
+    \ Algorithmic Issues:**\n1. **Naive Greedy Allocation**: Allocates to nearest\
+    \ chiplets first without considering:\n   - Future layer requirements\n   - Communication\
+    \ patterns between layers\n   - Spatial distribution across the mesh\n\n2. **Single-Layer\
+    \ Optimization**: Each layer mapped independently, ignoring:\n   - Inter-layer\
+    \ dependencies (critical for VGG16's sequential nature)\n   - Global memory balance\
+    \ across chiplets\n   - Network hotspot creation\n\n3. **Oversimplified Cost Function**:\
+    \ Only considers:\n   - Distance to previous layer's primary chiplet\n   - Available\
+    \ memory (coarsely)\n   - No actual communication cost modeling\n\n### **Specific\
+    \ Problems for Your 10x10 Mesh:**\n- **First layer placement**: Randomly chooses\
+    \ among high-memory chiplets, ignoring I/O proximity\n- **Sequential chaining**:\
+    \ Creates a \"snake\" pattern across mesh, maximizing communication hops\n- **No\
+    \ load balancing**: Early chiplets fill up quickly, leaving others underutilized\n\
+    - **Corner I/O ignored**: 4 corner I/O chiplets not leveraged for data staging\n\
+    \n## 2. Different Optimization Strategy: **Communication-Aware Clustered Mapping**\n\
+    \nInstead of nearest-neighbor, implement a **cluster-based approach** that:\n\n\
+    ### **Phase 1: Layer Grouping**\n```python\ndef group_layers_by_communication(model_metrics):\n\
+    \    # Analyze VGG16 structure to identify:\n    # 1. Layer clusters with high\
+    \ internal communication\n    # 2. Natural pipeline stages\n    # 3. Memory footprint\
+    \ patterns\n```\n\n### **Phase 2: Mesh Partitioning**\nGiven 10x10 mesh with 4\
+    \ corner I/O chiplets:\n- Divide mesh into 4 quadrants (each with one corner I/O)\n\
+    - Assign each quadrant ~24 CMOS chiplets\n- Map different VGG16 stages to different\
+    \ quadrants\n\n### **Phase 3: Within-Quadrant Optimization**\nFor each quadrant:\n\
+    - Use contour-based placement instead of nearest-neighbor\n- Consider both row\
+    \ and column distances\n- Balance memory usage across quadrant\n\n## 3. What the\
+    \ Mapper Ignores (But Should Use):\n\n### **Critical Missing Data:**\n1. **Inter-layer\
+    \ communication volume**: Not estimated at all\n2. **Activation sizes**: Only\
+    \ weights considered in capacity calculation\n3. **Pipeline parallelism opportunities**:\
+    \ VGG16 has natural pipeline stages\n4. **Network contention**: No modeling of\
+    \ shared links\n5. **I/O bandwidth**: Corner I/O chiplets not leveraged strategically\n\
+    \n### **Hardware-Specific Opportunities:**\n- **CMOS weight capacity**: 2.46M\
+    \ weights = ~0.77MB (tiny!) \u2192 Most layers need partitioning\n- **Mesh topology**:\
+    \ Can use 2D spatial mapping instead of 1D chain\n- **Corner I/O**: Natural for\
+    \ data ingress/egress points\n\n## **Implementation Recommendations:**\n\n###\
+    \ **Short-term fix for nearest-neighbor:**\n```python\ndef improved_nearest_neighbor(self,\
+    \ ...):\n    # Instead of single starting point, use multiple candidate seeds\n\
+    \    # Evaluate placement from multiple perspectives:\n    candidates = []\n \
+    \   for potential_start in available_chiplets:\n        # Project full layer sequence\
+    \ placement\n        total_comm_cost = estimate_total_communication(model_layers,\
+    \ potential_start)\n        memory_balance = calculate_memory_balance()\n    \
+    \    candidates.append((potential_start, total_comm_cost, memory_balance))\n \
+    \   \n    # Choose best starting point\n    best_start = min(candidates, key=lambda\
+    \ x: weighted_score(...))\n    \n    # Then proceed with modified nearest-neighbor...\n\
+    ```\n\n### **Medium-term: Contour-Based Placement**\nInstead of distance-sorted\
+    \ list, use:\n1. **Spiral search pattern** from starting chiplet\n2. **Maintain\
+    \ 2D balance** across mesh\n3. **Reserve capacity** for future layers\n\n### **Long-term:\
+    \ Optimized for VGG16**\nPre-compute optimal VGG16 mapping for 10x10 mesh:\n-\
+    \ Early conv layers near I/O chiplets (large activations)\n- Middle layers distributed\
+    \ across mesh\n- Final FC layers clustered for weight sharing\n\n## **Immediate\
+    \ Actionable Improvements:**\n\n1. **Modify starting chiplet selection** to consider\
+    \ I/O proximity\n2. **Add 2D balancing constraint** to prevent \"snaking\"\n3.\
+    \ **Implement simple look-ahead** to reserve space for next layer\n4. **Use quadrant-based\
+    \ allocation** to leverage corner I/O chiplets\n\nThe key insight: For VGG16 on\
+    \ a 10x10 mesh, **spatial locality in 2D** is more important than linear nearest-neighbor\
+    \ chaining. Group layers that communicate heavily into physical clusters on the\
+    \ mesh, even if it means slightly longer individual hops."
+  function_name: communication_aware_clustered_mapper
+  improvement_pct:
+    comm_latency: -0.29952933997112297
+    compute_latency: 4.260228255943308
+    total_latency: -0.29579659809121345
+  iteration: 2
+  metrics:
+    comm_latency: 297128.76
+    compute_latency: 232.37
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_imc_heavy_communication_aware_clustered_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 297128.76
+        compute_latency: 232.37
+        total_latency: 297361.13
+    results_label: vgg16_hetero_imc_heavy_communication_aware_clustered_mapper
+    total_latency: 297361.13
+  outcome: NO_IMPROVEMENT
+- error: ''
+  function_name: pipeline_spatial_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- error: ''
+  function_name: pipeline_spatial_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 2
+- error: Simulation timed out after 900 seconds.
+  function_name: pipeline_spatial_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 3
+- change_summary: "Looking at your CHIPSIM configuration and the two previous optimization\
+    \ attempts, I need to propose a fundamentally different approach. Both previous\
+    \ attempts focused on improving the nearest-neighbor algorithm, but the core issue\
+    \ is that **nearest-neighbor is fundamentally mismatched for large-scale neural\
+    \ networks on mesh topologies**.\n\n## The Fundamental Flaw: Sequential vs. Spatial\
+    \ Mapping\n\nYour mapper treats the 10x10 mesh (100 chiplets) as a linear chain\
+    \ when it's actually a 2D grid. For VGG16 with its sequential layers, the current\
+    \ algorithm creates a \"snaking path\" across the mesh that maximizes communication\
+    \ hops between layers.\n\n## NEW STRATEGY: **Pipeline-Stage Based Spatial Mapping**\n\
+    \nInstead of placing layers sequentially, we should:\n1. **Analyze VGG16's natural\
+    \ pipeline stages** (conv blocks)\n2. **Map each stage to a different region**\
+    \ of the mesh\n3. **Use spatial parallelism within each stage** where possible\n\
+    \n### Implementation Approach:\n\n```python\nclass PipelineSpatialMapper(ModelMapper):\n\
+    \    \"\"\"\n    Maps VGG16-like sequential networks using pipeline stages and\
+    \ spatial parallelism.\n    Each pipeline stage gets a rectangular region of the\
+    \ mesh.\n    Layers within a stage are mapped spatially across their region.\n\
+    \    \"\"\"\n    \n    def _pipeline_spatial_mapper(self, model_layer_info, system,\
+    \ preference, \n                                 current_available_crossbars,\
+    \ layer_mappings=None,\n                                 shortest_paths=None):\n\
+    \        \n        # Step 1: Identify which pipeline stage this layer belongs\
+    \ to\n        # For VGG16: conv1-2, conv3-4, conv5-7, conv8-10, conv11-13, fc14-16\n\
+    \        current_layer_idx = len(layer_mappings) if layer_mappings else 0\n  \
+    \      stage_idx = self._identify_pipeline_stage(current_layer_idx, model_layer_info)\n\
+    \        \n        # Step 2: Get the mesh region allocated to this stage\n   \
+    \     # Divide 10x10 mesh into rectangles for each pipeline stage\n        # Example:\
+    \ 6 stages for VGG16 \u2192 2x3 grid of regions\n        region = self._get_stage_region(stage_idx)\n\
+    \        \n        # Step 3: Within the region, map the layer spatially\n    \
+    \    # Instead of nearest-neighbor chain, fill the region systematically\n   \
+    \     if not layer_mappings:\n            # First layer of this stage\n      \
+    \      # Start from region corner closest to data source\n            start_chiplet\
+    \ = self._get_region_start(region, stage_idx)\n        else:\n            # Subsequent\
+    \ layer in same stage\n            # Place to maximize spatial parallelism, not\
+    \ minimize distance\n            last_mapping = layer_mappings[-1][1]\n      \
+    \      start_chiplet = self._get_spatial_placement(region, last_mapping, \n  \
+    \                                                     current_available_crossbars)\n\
+    \        \n        # Step 4: Modified allocation that prioritizes region filling\n\
+    \        # Fill region row by row or column by column\n        return self._region_fill_allocation(model_layer_info,\
+    \ region, start_chiplet,\n                                           current_available_crossbars)\n\
+    ```\n\n## Key Differences from Previous Approaches:\n\n### 1. **Mesh Region Partitioning**\
+    \ (not linear chains)\n- Divide the 10x10 mesh into logical regions (e.g., 3x2,\
+    \ 2x3, or 3x3 grid)\n- Assign each VGG16 pipeline stage to a region\n- Regions\
+    \ can be sized proportionally to stage compute requirements\n\n### 2. **Spatial\
+    \ vs. Temporal Optimization**\n- Current: Minimize distance between sequential\
+    \ layers (temporal)\n- New: Maximize spatial parallelism within each stage\n-\
+    \ Benefit: Layers in same stage can execute in parallel across region\n\n### 3.\
+    \ **Strategic I/O Chiplet Usage**\n- Map pipeline stages based on I/O requirements:\n\
+    \  - Early conv layers (large activations) \u2192 regions near input I/O chiplets\n\
+    \  - Later conv layers \u2192 central regions\n  - FC layers \u2192 regions near\
+    \ output I/O chiplets\n\n### 4. **Load Balancing Across Mesh**\n- Current: First\
+    \ few chiplets get overloaded\n- New: Each region gets balanced allocation\n-\
+    \ Regions sized based on stage compute/memory requirements\n\n## Implementation\
+    \ Details:\n\n### A. Stage Identification for VGG16:\n```python\ndef _identify_pipeline_stage(self,\
+    \ layer_idx, layer_info):\n    \"\"\"Map VGG16 layers to pipeline stages.\"\"\"\
+    \n    vgg16_stages = [\n        (0, 2, 'conv1-2'),    # Stage 1: conv1_1, conv1_2\n\
+    \        (2, 4, 'conv3-4'),    # Stage 2: conv2_1, conv2_2  \n        (4, 7, 'conv5-7'),\
+    \    # Stage 3: conv3_1-3\n        (7, 10, 'conv8-10'),  # Stage 4: conv4_1-3\n\
+    \        (10, 13, 'conv11-13'),# Stage 5: conv5_1-3\n        (13, 16, 'fc14-16')\
+    \   # Stage 6: fc layers\n    ]\n    \n    for start, end, name in vgg16_stages:\n\
+    \        if start <= layer_idx < end:\n            return name\n    return 'unknown'\n\
+    ```\n\n### B. Mesh Region Allocation:\n```python\ndef _partition_mesh_into_regions(self,\
+    \ num_stages=6):\n    \"\"\"Partition 10x10 mesh into regions for pipeline stages.\"\
+    \"\"\n    # Example: 3x2 grid for 6 stages\n    # Each region ~3x5 or 3x4 chiplets\n\
+    \    regions = {\n        'conv1-2': {'rows': (0, 3), 'cols': (0, 5)},    # Top-left\n\
+    \        'conv3-4': {'rows': (0, 3), 'cols': (5, 10)},   # Top-right\n       \
+    \ 'conv5-7': {'rows': (3, 6), 'cols': (0, 5)},    # Middle-left\n        'conv8-10':\
+    \ {'rows': (3, 6), 'cols': (5, 10)},  # Middle-right\n        'conv11-13': {'rows':\
+    \ (6, 10), 'cols': (0, 5)}, # Bottom-left\n        'fc14-16': {'rows': (6, 10),\
+    \ 'cols': (5, 10)},  # Bottom-right\n    }\n    \n    # Map regions to chiplet\
+    \ IDs\n    for stage, region in regions.items():\n        chiplet_ids = []\n \
+    \       for row in range(region['rows'][0], region['rows'][1]):\n            for\
+    \ col in range(region['cols'][0], region['cols'][1]):\n                chiplet_id\
+    \ = row * 10 + col + 1  # 1-based indexing\n                chiplet_ids.append(chiplet_id)\n\
+    \        region['chiplets'] = chiplet_ids\n    \n    return regions\n```\n\n###\
+    \ C. Region-Fill Allocation Strategy:\n```python\ndef _region_fill_allocation(self,\
+    \ model_layer_info, region, start_chiplet,\n                           current_available_crossbars):\n\
+    \    \"\"\"\n    Fill a region systematically instead of chaining.\n    Prioritizes\
+    \ keeping computation within the region.\n    \"\"\"\n    # Get all chiplets in\
+    \ this region\n    region_chiplets = region['chiplets']\n    \n    # Sort chiplets\
+    \ for systematic filling (e.g., row-major)\n    sorted_chiplets = sorted(region_chiplets,\
+    \ \n                            key=lambda cid: ((cid-1)//10, (cid-1)%10))\n \
+    \   \n    # Filter by availability\n    available_in_region = [cid for cid in\
+    \ sorted_chiplets \n                          if current_available_crossbars[cid-1]\
+    \ > 0]\n    \n    # Allocate using available chiplets in region\n    # Similar\
+    \ to nearest-neighbor but constrained to region\n    # and with systematic filling\
+    \ pattern\n    \n    return self._allocate_within_set(model_layer_info, available_in_region,\n\
+    \                                    current_available_crossbars)\n```\n\n## Why\
+    \ This Will Work Better:\n\n1. **Exploits VGG16 Structure**: Uses known pipeline\
+    \ stages instead of treating all layers equally\n2. **Leverages 2D Mesh**: Uses\
+    \ spatial regions instead of linear chains\n3. **Reduces Cross-Mesh Traffic**:\
+    \ Most communication stays within regions\n4. **Enables Pipeline Parallelism**:\
+    \ Different stages can overlap execution\n5. **Better Load Distribution**: Prevents\
+    \ early chiplets from becoming bottlenecks\n\n## Integration Strategy:\n\nStart\
+    \ with a hybrid approach:\n1. Keep the existing mapper interface\n2. Add pipeline-spatial\
+    \ as a new mapping function\n3. Gradually refine based on simulation results\n\
+    \nThis approach fundamentally changes the optimization objective from \"minimize\
+    \ distance between sequential layers\" to \"maximize spatial parallelism within\
+    \ pipeline stages while minimizing inter-stage communication.\""
+  function_name: pipeline_spatial_mapper
+  improvement_pct:
+    comm_latency: 8.113206852937482
+    compute_latency: -4649.009105516872
+    total_latency: 4.300759561708767
+  iteration: 3
+  metrics:
+    comm_latency: 272206.75
+    compute_latency: 11526.32
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_imc_heavy_topology_aware_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 272206.75
+        compute_latency: 11526.32
+        total_latency: 283733.07
+    results_label: vgg16_hetero_imc_heavy_pipeline_spatial_mapper
+    total_latency: 283733.07
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

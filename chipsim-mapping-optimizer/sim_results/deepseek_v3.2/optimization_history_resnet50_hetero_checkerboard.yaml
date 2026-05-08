@@ -1,0 +1,324 @@
+baseline_metrics:
+  comm_latency: 477933.4
+  compute_latency: 3027.97
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/resnet50_hetero_checkerboard/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 480961.37
+best_metrics:
+  comm_latency: 146647.39
+  compute_latency: 4077.13
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_checkerboard_network_aware_hierarchical_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: resnet50_hetero_checkerboard_network_aware_hierarchical_mapper
+  total_latency: 150724.51
+config: resnet50_hetero_checkerboard
+history:
+- error: "Traceback (most recent call last):\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\", line\
+    \ 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n             \
+    \         ^^^^^^^^^^^^\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 51, in run\n    self._run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 122, in _run_simulation\n    self.gm.run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  function_name: improved_heterogeneous_mesh_mapper
+  iteration: 1
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- function_name: improved_heterogeneous_mesh_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 2
+- change_summary: "## Analysis of Nearest-Nighbor Mapper Weaknesses for CHIPSIM Configuration\n\
+    \n### 1. Key Weaknesses of Current Nearest-Nighbor Approach\n\n**A. Localized\
+    \ Mapping Without Global Optimization**\n- The mapper greedily places each layer\
+    \ starting from either:\n  - First layer: highest-available-memory chiplet\n \
+    \ - Subsequent layers: chiplet with largest share from previous layer\n- This\
+    \ creates a **serial dependency chain** where each layer's placement depends solely\
+    \ on the previous layer's largest allocation. This fails to consider:\n  - **Future\
+    \ layer requirements** (size, communication patterns)\n  - **Inter-layer dependencies**\
+    \ beyond immediate adjacency\n  - **Global balance** of chiplet utilization across\
+    \ the entire model\n\n**B. Ignoring Communication Costs**\n- While distances are\
+    \ computed via shortest paths, the algorithm **never actually uses distance metrics\
+    \ for allocation decisions** beyond sorting.\n- Allocation percentages are determined\
+    \ purely by **available capacity**, not by:\n  - Communication latency between\
+    \ source/destination chiplets\n  - Network congestion potential (especially on\
+    \ mesh topology)\n  - Bandwidth limitations between partitions\n\n**C. Coarse\
+    \ Capacity Management**\n- The capacity unit calculation (`_calculate_layer_requirements`)\
+    \ treats CMOS chiplets differently (weight units vs IMC crossbars), but:\n  -\
+    \ **No consideration of activation memory** (only weight storage)\n  - **No memory\
+    \ bandwidth constraints** in allocation decisions\n  - **No compute throughput\
+    \ balancing** (all chiplets assumed equal compute power)\n\n**D. Topology-Agnostic\
+    \ Placement**\n- The 10x10 mesh with corner IO chiplets creates specific patterns:\n\
+    \  - **IO chiplets only at corners** \u2192 data must travel to compute chiplets\n\
+    \  - **Checkerboard CMOS distribution** \u2192 compute resources are non-uniformly\
+    \ distributed\n- The mapper ignores:\n  - **Proximity to IO chiplets** for input/output\
+    \ layers\n  - **Spatial distribution** of CMOS chiplets across mesh\n  - **Network\
+    \ bisection bandwidth** limitations\n\n**E. Layer-Type Blindness**\n- The mapper\
+    \ treats all layers (conv, fc, attention) identically in placement logic:\n  -\
+    \ **No differentiation** between compute-intensive vs memory-intensive layers\n\
+    \  - **No consideration** of layer fan-in/fan-out patterns\n  - **No attention\
+    \ to** attention layers' unique communication patterns (Q, K, V projections)\n\
+    \n**F. Memory Fragmentation**\n- The greedy nearest-neighbor approach leads to:\n\
+    \  - **Early exhaustion** of nearby chiplets\n  - **Fragmented memory** across\
+    \ chiplet array\n  - **Increased communication distances** for later layers as\
+    \ nearby chiplets are depleted\n\n### 2. Specific Opportunities for Improvement\
+    \ Given This Config\n\n**A. Exploit Mesh Topology Structure**\n- **Corner IO chiplets**:\
+    \ Place early/late layers (input/output) near corners to minimize IO communication\n\
+    - **Checkerboard CMOS pattern**: Group layers onto CMOS clusters rather than spreading\
+    \ across mixed regions\n- **10x10 mesh**: Use row/column-based placement strategies\
+    \ to minimize hop counts\n\n**B. Layer-Type Aware Mapping**\n- **Convolution layers**:\
+    \ Map to contiguous blocks of chiplets to minimize intermediate activation transfer\n\
+    - **Attention layers**: Map Q/K/V projections to neighboring chiplets to reduce\
+    \ cross-chiplet communication\n- **FC layers**: Map based on weight memory requirements\
+    \ vs compute needs\n\n**C. Communication-Aware Allocation**\n- **Weight sharing\
+    \ between layers**: Place layers with shared weights (e.g., residual connections)\
+    \ on same/similar chiplets\n- **Activation flow optimization**: Map layers in\
+    \ dataflow order along communication paths\n- **Network congestion avoidance**:\
+    \ Avoid overloading specific network links between frequently communicating chiplets\n\
+    \n**D. Capacity Balancing**\n- **Memory/Compute ratio**: CMOS chiplets have weight\
+    \ storage constraints but high compute - balance layer requirements accordingly\n\
+    - **Activation memory**: Consider temporary activation storage needs during mapping\n\
+    - **Cross-chiplet communication overhead**: Account for communication capacity\
+    \ in allocation decisions\n\n### 3. What Data/Signals the Mapper Currently Ignores\
+    \ That It Should Use\n\n**A. Layer Communication Patterns**\n- **Fan-in/fan-out\
+    \ degree**: How many preceding/succeeding layers communicate with this layer\n\
+    - **Activation size**: Temporary data transfer requirements between layers\n-\
+    \ **Weight reuse**: Which layers share weights or have similar weight patterns\n\
+    \n**B. Network Performance Metrics**\n- **Link bandwidth**: Capacity of individual\
+    \ network links\n- **Hop count penalties**: Actual latency per hop in the mesh\
+    \ topology\n- **Congestion hotspots**: Potential bottlenecks in the 10x10 mesh\
+    \ (center vs edges)\n\n**C. Chiplet Heterogeneity**\n- **CMOS vs IMC differences**:\
+    \ Beyond just capacity units, they have different:\n  - Compute throughput per\
+    \ weight unit\n  - Energy efficiency profiles\n  - Memory bandwidth limitations\n\
+    - **Physical placement**: Corner IO chiplets have different network connectivity\
+    \ than edge/center compute chiplets\n\n**D. Model-Level Information**\n- **Model\
+    \ graph structure**: Dependencies between layers beyond sequential order\n- **Critical\
+    \ paths**: Layers that dominate overall latency\n- **Memory access patterns**:\
+    \ Which layers are memory-intensive vs compute-intensive\n\n**E. Runtime Signals**\n\
+    - **Network utilization**: Real-time congestion information during mapping\n-\
+    \ **Chiplet temperature/power**: Thermal constraints that affect placement\n-\
+    \ **Historical performance**: Past mapping outcomes for similar layers\n\n###\
+    \ Recommended Improvements:\n1. **Implement layer graph analysis** to identify\
+    \ communication clusters\n2. **Add network-aware cost function** that penalizes\
+    \ long-distance allocations\n3. **Use bin-packing algorithms** to minimize fragmentation\
+    \ across chiplets\n4. **Differentiate layer types** in placement strategy (conv\
+    \ vs attention vs fc)\n5. **Consider IO proximity** for input/output layers in\
+    \ ResNet50\n6. **Balance chiplet utilization** across the entire model rather\
+    \ than layer-by-layer\n\nThe current mapper is essentially a **capacity-first\
+    \ greedy algorithm** with naive proximity sorting. For a 10x10 mesh with heterogeneous\
+    \ chiplets running ResNet50, this leads to suboptimal communication patterns and\
+    \ unbalanced resource utilization."
+  function_name: improved_heterogeneous_mesh_mapper
+  improvement_pct:
+    comm_latency: 23.5061663403311
+    compute_latency: -31.93030314038779
+    total_latency: 23.157155012262205
+  iteration: 1
+  metrics:
+    comm_latency: 365589.58
+    compute_latency: 3994.81
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_checkerboard_improved_heterogeneous_mesh_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 365589.58
+        compute_latency: 3994.81
+        total_latency: 369584.4
+    results_label: resnet50_hetero_checkerboard_improved_heterogeneous_mesh_mapper
+    total_latency: 369584.4
+  outcome: IMPROVED
+- error: "Traceback (most recent call last):\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/simulate.py\", line\
+    \ 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n             \
+    \         ^^^^^^^^^^^^\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 51, in run\n    self._run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\"\
+    , line 122, in _run_simulation\n    self.gm.run_simulation()\n  File \"/home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  function_name: network_aware_hierarchical_mapper
+  iteration: 2
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- function_name: network_aware_hierarchical_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 2
+- change_summary: "Based on my analysis, here's a different optimization strategy\
+    \ that addresses the fundamental weaknesses:\n\n## **Network-Aware Hierarchical\
+    \ Mapping Strategy**\n\nInstead of the naive nearest-neighbor approach, implement\
+    \ a multi-phase mapping algorithm:\n\n### **Phase 1: Model Graph Analysis**\n\
+    ```python\ndef analyze_model_graph(model_metrics):\n    \"\"\"\n    Analyze the\
+    \ ResNet50 model structure to identify:\n    1. Communication clusters (layers\
+    \ with high data dependencies)\n    2. Bottleneck layers (large activations/weights)\n\
+    \    3. Parallelizable paths (residual connections)\n    \"\"\"\n    # Extract\
+    \ from ResNet50 structure:\n    # - Residual blocks with skip connections\n  \
+    \  # - Downsampling points (stride=2)\n    # - Activation sizes between layers\n\
+    \    # - Weight reuse opportunities\n```\n\n### **Phase 2: Topology-Aware Chiplet\
+    \ Clustering**\n```python\ndef create_chiplet_clusters(system):\n    \"\"\"\n\
+    \    Group chiplets into logical clusters based on:\n    1. Physical proximity\
+    \ in 10x10 mesh\n    2. CMOS checkerboard pattern\n    3. Distance to IO corners\n\
+    \    4. Network bisection boundaries\n    \"\"\"\n    # For 10x10 mesh with checkerboard\
+    \ CMOS:\n    # Create 4 quadrants (each ~5x5)\n    # Within each quadrant, group\
+    \ CMOS chiplets\n    # Mark IO-adjacent clusters for input/output layers\n```\n\
+    \n### **Phase 3: Communication-Cost-Aware Placement**\n```python\ndef communication_aware_placement(layer,\
+    \ available_chiplets, predecessor_mappings):\n    \"\"\"\n    Place layer considering:\n\
+    \    1. Communication cost to predecessor layers\n    2. Network congestion avoidance\n\
+    \    3. Future layer requirements\n    \"\"\"\n    # Cost function: \u03B1 \xD7\
+    \ distance + \u03B2 \xD7 network_load + \u03B3 \xD7 future_compatibility\n   \
+    \ # Prioritize placing layers with high activation transfer nearby\n    # Avoid\
+    \ overloading network links between frequently communicating chiplets\n```\n\n\
+    ### **Phase 4: Load-Balanced Allocation**\n```python\ndef balanced_allocation(layer_requirements,\
+    \ candidate_chiplets):\n    \"\"\"\n    Allocate layer across chiplets while:\n\
+    \    1. Balancing compute load across CMOS clusters\n    2. Minimizing memory\
+    \ fragmentation\n    3. Preserving contiguous blocks for future layers\n    \"\
+    \"\"\n    # Use modified bin-packing with communication constraints\n    # Reserve\
+    \ capacity for anticipated future layers\n    # Group allocations to minimize\
+    \ cross-cluster communication\n```\n\n## **Specific Improvements for This Configuration:**\n\
+    \n### **1. Exploit ResNet50 Structure:**\n- **Input/Output Layers**: Map near\
+    \ corner IO chiplets (positions 1, 10, 91, 100)\n- **Residual Blocks**: Keep entire\
+    \ residual blocks within the same chiplet cluster\n- **Downsampling Points**:\
+    \ Place before/after downsampling in neighboring chiplets\n\n### **2. Leverage\
+    \ Checkerboard CMOS Pattern:**\n- **CMOS Clusters**: Group CMOS chiplets into\
+    \ 2\xD72 or 3\xD73 compute islands\n- **IMC Interleaving**: Use IMC chiplets for\
+    \ weight-intensive portions\n- **Load Distribution**: Balance compute across all\
+    \ 96 CMOS chiplets\n\n### **3. Network-Aware Placement:**\n- **Row/Column Alignment**:\
+    \ Place communicating layers in same row/column\n- **Corner Avoidance**: Don't\
+    \ route through corner IO chiplets unnecessarily\n- **Hop Minimization**: Use\
+    \ Manhattan distance penalties in cost function\n\n### **4. Memory Management:**\n\
+    - **Activation-Aware**: Consider activation memory alongside weight storage\n\
+    - **Pipeline Buffering**: Reserve capacity for intermediate activations\n- **Prefetch\
+    \ Planning**: Anticipate weight loading patterns\n\n## **Implementation Priority:**\n\
+    \n1. **Highest Impact**: Add communication cost to allocation decisions\n2. **Medium\
+    \ Impact**: Implement chiplet clustering based on CMOS pattern\n3. **High Value**:\
+    \ Model-aware placement for ResNet50 structure\n4. **Future Proofing**: Load balancing\
+    \ across the entire model execution\n\n## **Expected Benefits:**\n- **30-50% reduction**\
+    \ in cross-chiplet communication\n- **Better load balancing** across 96 CMOS chiplets\n\
+    - **Reduced network congestion** in 10x10 mesh\n- **Lower overall latency** for\
+    \ ResNet50 inference\n\nThis approach moves from reactive nearest-neighbor to\
+    \ proactive network-aware mapping, which should significantly improve performance\
+    \ on this specific heterogeneous mesh configuration."
+  function_name: network_aware_hierarchical_mapper
+  improvement_pct:
+    comm_latency: 69.31635453810091
+    compute_latency: -34.648956231402565
+    total_latency: 68.66182620862045
+  iteration: 2
+  metrics:
+    comm_latency: 146647.39
+    compute_latency: 4077.13
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_checkerboard_network_aware_hierarchical_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 146647.39
+        compute_latency: 4077.13
+        total_latency: 150724.51
+    results_label: resnet50_hetero_checkerboard_network_aware_hierarchical_mapper
+    total_latency: 150724.51
+  outcome: IMPROVED
+- function_name: wavefront_pipeline_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Looking at the provided CHIPSIM configuration and analysis of the\
+    \ mapping algorithm, I'll propose a fundamentally different optimization strategy\
+    \ that addresses the core weaknesses more directly.\n\n## **Dataflow-Aware Pipeline\
+    \ Mapping Strategy**\n\n### **Core Problem Recognition:**\nThe current mapper\
+    \ treats each layer independently with greedy placement, creating a serial chain.\
+    \ For ResNet50 on a 10x10 mesh with 96 CMOS chiplets, we need to **exploit pipeline\
+    \ parallelism** while **minimizing inter-layer communication**.\n\n### **New Strategy:\
+    \ Wavefront Pipeline Mapping**\n\nInstead of nearest-neighbor, implement a **dataflow\
+    \ pipeline** where layers are mapped to create overlapping computation waves across\
+    \ the mesh:\n\n```python\ndef wavefront_pipeline_mapper(self, model_layer_info,\
+    \ system, preference, \n                             current_available_capacity,\
+    \ layer_mappings=None, shortest_paths=None):\n    \"\"\"\n    Maps layers in a\
+    \ wavefront pattern across the mesh to create pipelined execution.\n    \n   \
+    \ Key insights for ResNet50:\n    1. Residual blocks can execute in parallel with\
+    \ proper data routing\n    2. The 10x10 mesh can sustain multiple concurrent data\
+    \ flows\n    3. CMOS checkerboard creates natural compute lanes\n    \"\"\"\n\
+    \    \n    # PHASE 1: Identify pipeline stages in ResNet50\n    # ResNet50 has\
+    \ ~50 layers grouped into 5 stages with downsampling\n    # Each stage becomes\
+    \ a pipeline wave\n    \n    # PHASE 2: Map each stage to a diagonal wavefront\
+    \ across mesh\n    # Stage 1 (early conv): Near IO chiplets\n    # Stage 2-4 (middle):\
+    \ Spread across center mesh\n    # Stage 5 (final layers): Near output IO chiplets\n\
+    \    \n    # PHASE 3: Within each stage, map layers to create compute pipelines\n\
+    \    # Layer N \u2192 Chiplet[i,j]\n    # Layer N+1 \u2192 Chiplet[i,j+1] (next\
+    \ column in wave)\n    # Creates systolic flow across mesh\n```\n\n### **Specific\
+    \ Optimizations for This Configuration:**\n\n#### **1. Mesh Segmentation for Parallel\
+    \ Dataflows**\n```python\ndef segment_mesh_for_resnet(system):\n    \"\"\"\n \
+    \   Divide 10x10 mesh into dataflow lanes:\n    - 4 vertical lanes (2 columns\
+    \ each) for parallel residual streams\n    - 2 horizontal coordination lanes for\
+    \ feature map aggregation\n    - Corner IO as entry/exit points\n    \"\"\"\n\
+    \    # Lane 1: Columns 0-1: Process stream A\n    # Lane 2: Columns 2-3: Process\
+    \ stream B  \n    # Lane 3: Columns 4-5: Process stream C\n    # Lane 4: Columns\
+    \ 6-7: Process stream D\n    # Columns 8-9: Aggregation and routing\n```\n\n####\
+    \ **2. Residual Connection Optimization**\n```python\ndef map_residual_block(residual_layers,\
+    \ mesh_lane):\n    \"\"\"\n    Special mapping for ResNet residual blocks:\n \
+    \   - Main path: Mapped along diagonal in assigned lane\n    - Skip connection:\
+    \ Mapped to adjacent chiplet for minimal-hop addition\n    - Result: Both paths\
+    \ converge at same chiplet for element-wise add\n    \"\"\"\n    # Main conv layers:\
+    \ Chiplet[row, col] \u2192 Chiplet[row+1, col+1]\n    # Skip connection: Chiplet[row,\
+    \ col] \u2192 Chiplet[row+2, col] (direct vertical)\n    # Addition at: Chiplet[row+2,\
+    \ col+2]\n```\n\n#### **3. CMOS Checkerboard-Aware Load Distribution**\n```python\n\
+    def balance_cmos_checkerboard(assignments, cmos_positions):\n    \"\"\"\n    Ensure\
+    \ each pipeline wave uses both CMOS and non-CMOS chiplets efficiently.\n    Since\
+    \ CMOS are checkerboarded, each wave should alternate:\n    - Compute-heavy ops\
+    \ \u2192 CMOS chiplets\n    - Routing/activation \u2192 Non-CMOS chiplets\n  \
+    \  - Memory-heavy ops \u2192 IMC chiplets (if available)\n    \"\"\"\n    # For\
+    \ 10x10 with checkerboard CMOS: 48 CMOS per color\n    # Assign alternating pattern:\
+    \ CMOS \u2192 routing \u2192 CMOS \u2192 routing\n```\n\n### **Implementation\
+    \ Approach:**\n\n**Step 1: Preprocess ResNet50 Structure**\n```python\ndef analyze_resnet_structure(model_metrics):\n\
+    \    stages = {\n        'stage1': [],  # Initial conv + maxpool\n        'stage2':\
+    \ [],  # First residual group\n        'stage3': [],  # Second residual group\
+    \ (downsample)\n        'stage4': [],  # Third residual group (downsample)  \n\
+    \        'stage5': [],  # Fourth residual group (downsample)\n        'stage6':\
+    \ []   # Final layers\n    }\n    # Group layers by ResNet50's natural structure\n\
+    \    # This enables stage-based pipeline mapping\n```\n\n**Step 2: Create Pipeline\
+    \ Wave Schedule**\n```python\ndef create_pipeline_waves(mesh, stages):\n    \"\
+    \"\"\n    Create overlapping computation waves:\n    Wave 1: Stage 1 layers start\
+    \ at cycle 0\n    Wave 2: Stage 2 layers start at cycle 2 (after stage1 partial\
+    \ completion)\n    Wave 3: Stage 3 layers start at cycle 4\n    etc.\n    \n \
+    \   This hides communication latency behind computation\n    \"\"\"\n```\n\n**Step\
+    \ 3: Bidirectional Data Routing**\n```python\ndef bidirectional_data_routing(source_chiplet,\
+    \ dest_chiplet, mesh):\n    \"\"\"\n    For 10x10 mesh, use both horizontal and\
+    \ vertical paths:\n    - East-West for feature map propagation\n    - North-South\
+    \ for residual connections\n    - Avoid diagonal congestion by using orthogonal\
+    \ routing\n    \"\"\"\n```\n\n### **Expected Benefits:**\n\n1. **Pipeline Parallelism**:\
+    \ Multiple layers execute concurrently in wavefront pattern\n2. **Communication\
+    \ Overlap**: Inter-layer data transfer happens during computation\n3. **Load Balancing**:\
+    \ All 96 CMOS chiplets utilized throughout inference\n4. **Network Contention\
+    \ Avoidance**: Structured routing prevents hotspot creation\n\n### **Key Differentiators\
+    \ from Previous Attempts:**\n\n1. **Not greedy** - Plans entire model mapping\
+    \ before execution\n2. **Not just proximity-based** - Uses dataflow patterns specific\
+    \ to ResNet50\n3. **Exploits mesh regularity** - Uses grid structure for predictable\
+    \ routing\n4. **Considers temporal execution** - Overlaps computation and communication\n\
+    \n### **Metrics to Track:**\n- Pipeline utilization (percentage of chiplets active\
+    \ each cycle)\n- Wavefront efficiency (smoothness of diagonal progression)\n-\
+    \ Residual connection latency (skip vs main path timing)\n- Network link utilization\
+    \ balance\n\nThis approach transforms the 10x10 mesh from a passive communication\
+    \ fabric into an **active computation pipeline**, which should significantly improve\
+    \ throughput for ResNet50's structured computation pattern."
+  function_name: wavefront_pipeline_mapper
+  improvement_pct:
+    comm_latency: 34.67861630930167
+    compute_latency: 0.540295973870272
+    total_latency: 34.463690919709414
+  iteration: 3
+  metrics:
+    comm_latency: 312192.71
+    compute_latency: 3011.61
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/resnet50_hetero_checkerboard_wavefront_pipeline_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      resnet50:
+        comm_latency: 312192.71
+        compute_latency: 3011.61
+        total_latency: 315204.33
+    results_label: resnet50_hetero_checkerboard_wavefront_pipeline_mapper
+    total_latency: 315204.33
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

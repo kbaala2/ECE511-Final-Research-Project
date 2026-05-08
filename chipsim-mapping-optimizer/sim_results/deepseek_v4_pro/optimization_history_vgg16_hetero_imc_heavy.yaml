@@ -1,0 +1,403 @@
+baseline_metrics:
+  comm_latency: 296241.43
+  compute_latency: 242.71
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_imc_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296484.14
+best_metrics:
+  comm_latency: 296241.43
+  compute_latency: 242.71
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_imc_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296484.14
+config: vgg16_hetero_imc_heavy
+history:
+- function_name: my_optimized_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "**1. Key weaknesses of the current nearest\u2011neighbour approach**\n\
+    \n- **Greedy, myopic placement**  \n  Each layer is placed only with respect to\
+    \ the previous layer\u2019s most\u2011used chiplet. The algorithm never looks\
+    \ ahead to future layers, so it cannot prevent a layer from being placed far from\
+    \ its consumers. This leads to long activation paths, especially damaging in a\
+    \ non\u2011pipelined execution where every hop adds directly to end\u2011to\u2011\
+    end latency.\n\n- **No global communication\u2011cost model**  \n  The mapper\
+    \ ignores the volume of data flowing between layers. A convolutional layer that\
+    \ sends huge activation tensors to the next layer is treated exactly like a small\
+    \ FC layer. Without weighting edge distances by the activation size, the algorithm\
+    \ fails to co\u2011locate heavy communication pairs.\n\n- **Fragmented, capacity\u2011\
+    driven packing**  \n  When a layer does not fit on a single chiplet, the code\
+    \ consumes the nearest chiplet\u2019s entire remaining capacity, then moves to\
+    \ the next nearest chiplet, and so on. This can spread a single layer across chiplets\
+    \ that are far apart (due to distance ordering), forcing the layer\u2019s input\
+    \ activations to be broadcast over many hops and its output activations to be\
+    \ collected from multiple distant points.\n\n- **Only one prior layer\u2019s placement\
+    \ matters**  \n  After the first layer, the start chiplet is always the chiplet\
+    \ that held the largest *portion* of the previous layer. If the previous layer\
+    \ was fragmented across many chiplets, the algorithm may pick a poorly positioned\
+    \ chiplet as the anchor, ignoring the fact that other producers (from earlier\
+    \ layers) also send data to the current layer. In residual or multi\u2011path\
+    \ networks this completely breaks locality.\n\n- **First\u2011layer placement\
+    \ is arbitrary**  \n  The first chiplet is chosen purely by \u201Cmost available\
+    \ memory, then highest (undefined) performance metric\u201D. No consideration\
+    \ is given to final output consumers, IO chiplet locations, or overall chiplet\
+    \ occupancy. This can seed the whole mapping in a corner of the mesh, causing\
+    \ later layers to drift across the entire die.\n\n- **No load\u2011balancing across\
+    \ the mesh**  \n  The mapper fills one chiplet completely before touching the\
+    \ next. This creates hot\u2011spots of weight storage and leaves other chiplets\
+    \ empty, increasing the average distance for subsequent layers that need resources\
+    \ and for the data they must exchange.\n\n- **IO chiplet positions are ignored**\
+    \  \n  Four IO chiplets sit at mesh corners, but the mapper never tries to place\
+    \ the first input layer near an IO chiplet or the final output layer close to\
+    \ an IO chiplet. Off\u2011chip data (DRAM accesses) must then traverse the whole\
+    \ network, adding unnecessary latency and energy.\n\n**2. Specific improvement\
+    \ opportunities for this config (96 CMOS_Compute, 10\xD710 mesh, weight\u2011\
+    stationary, non\u2011pipelined communication)**\n\n- **Global placement / floorplanning**\
+    \  \n  Since the number of compute chiplets is moderate (96) and the model is\
+    \ a known DAG (VGG16), a one\u2011off global optimization is feasible. Approaches\
+    \ like force\u2011directed placement, spectral bipartitioning, or simulated annealing\
+    \ could minimise the sum of (distance \xD7 activation volume) across all layer\
+    \ dependencies while respecting per\u2011chiplet weight capacity.\n\n- **Activation\u2011\
+    weighted proximity**  \n  Modify the cost metric to include the *product* of the\
+    \ Manhattan distance and the output activation size (`input_activation` from the\
+    \ layer info). This naturally pulls together layers that exchange the most data.\n\
+    \n- **Look\u2011ahead placement**  \n  Instead of only looking backwards, maintain\
+    \ a \u201Cfrontier\u201D of the next few layers and place each one at the centroid\
+    \ of all its predecessors, weighted by the data each predecessor sends. This reduces\
+    \ the chance of isolating a layer from its multiple producers.\n\n- **Contiguous\
+    \ region allocation**  \n  Use a breadth\u2011first flood\u2011fill from a seed\
+    \ chiplet (e.g., the one nearest to the expected IO location) to keep the entire\
+    \ model inside a compact sub\u2011mesh. Only spill to larger distances when capacity\
+    \ forces it. This drastically reduces the average number of hops.\n\n- **IO\u2011\
+    aware seeding**  \n  For input\u2011dominant models, seed the mapping near an\
+    \ input IO chiplet; for output\u2011dominant, near an output IO chiplet. In a\
+    \ VGG16\u2011like model, both the first and last layers are important, so a central\
+    \ starting point or a \u201Ctwo\u2011end\u201D approach (start from both ends\
+    \ and meet) could work.\n\n- **Bipartition for fragmented layers**  \n  When a\
+    \ layer must be split, use a max\u2011flow min\u2011cut or a clustering algorithm\
+    \ to partition it across a *set* of chiplets that are close to each other *and*\
+    \ close to the layer\u2019s producers/consumers, rather than greedily soaking\
+    \ up nearby capacity one chiplet at a time.\n\n- **Incorporate network non\u2011\
+    pipelining constraint**  \n  Because layers execute sequentially in non\u2011\
+    pipelined mode, the *maximum* hop distance between any two dependent layers becomes\
+    \ the performance bottleneck. A min\u2011max formulation (minimise the worst\u2011\
+    case distance \xD7 activation volume) would directly target this config\u2019\
+    s latency.\n\n**3. Data / signals currently ignored that the mapper should exploit**\n\
+    \n- **Layer connectivity graph** \u2013 The full DAG of producers and consumers\
+    \ is available but used only indirectly through `layer_mappings`; the algorithm\
+    \ never examines the *next* layer\u2019s requirements or the flow of activations\
+    \ between non\u2011adjacent layers (e.g., in residual connections).\n\n- **Activation\
+    \ tensor sizes** \u2013 `layer_info` contains `'input_activation'` (the size of\
+    \ the layer\u2019s input). Output activation size can be computed from layer parameters.\
+    \ This volume is crucial to weight communication costs but is completely ignored.\n\
+    \n- **IO chiplet positions** \u2013 The system knows which chiplets are IO (corners\
+    \ of the mesh) but the mapper never uses that information to steer the placement\
+    \ of the first/last layer.\n\n- **Per\u2011chiplet \u201Cperformance\u201D metric**\
+    \ \u2013 The code reads `chiplet_network.nodes[chiplet_id].get(active_metric,\
+    \ 0)` but the network nodes likely never have a meaningful `performance` attribute.\
+    \ This metric is a dead signal.\n\n- **Available bandwidth / injection rate**\
+    \ \u2013 The config specifies 128\u2011bit packets and a 1\u202FGHz network; these\
+    \ could be used to estimate link congestion, but the mapper has no model of traffic\
+    \ demand and therefore cannot avoid creating hotspots.\n\n- **Layer output channel\
+    \ partitioning effect** \u2013 When a layer is split across multiple chiplets\
+    \ (each gets a subset of output channels), the mapper does not account for the\
+    \ resulting communication pattern: all producers of layer N must send to *all*\
+    \ chiplets holding parts of layer N+1. This all\u2011to\u2011all pattern\u2019\
+    s cost scales with the product of producer and consumer counts, which the current\
+    \ algorithm does not control.\n\n- **Weight\u2011stationary re\u2011activation\
+    \ cost** \u2013 In weight\u2011stationary mode, weights are loaded once; therefore\
+    \ the *run\u2011time* cost is entirely due to activation movement. The mapper\
+    \ should treat the placement of a layer purely as an activation\u2011flow problem,\
+    \ not as a weight\u2011loading problem, yet the code only cares about weight storage\
+    \ capacity, not about the recurring data flow that the placement induces."
+  function_name: my_optimized_mapper
+  improvement_pct:
+    comm_latency: -133.49895387691046
+    compute_latency: -6273.968934118908
+    total_latency: -138.5257100093111
+  iteration: 1
+  metrics:
+    comm_latency: 691720.64
+    compute_latency: 15470.26
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_imc_heavy_my_optimized_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 691720.64
+        compute_latency: 15470.26
+        total_latency: 707190.9
+    results_label: vgg16_hetero_imc_heavy_my_optimized_mapper
+    total_latency: 707190.9
+  outcome: NO_IMPROVEMENT
+- function_name: my_optimized_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "## Analysis of `_nearest_neighbor_mapper_v3` Weaknesses\n\n###\
+    \ 1. Key weaknesses of the current nearest\u2011neighbour approach\n\n1. **Greedy,\
+    \ backward\u2011only placement**  \n   Each layer is placed starting from the\
+    \ chiplet that held the largest portion of the *previous* layer only. It never\
+    \ looks ahead to the consumers of the current layer. This easily creates long\
+    \ communication paths, especially when a layer is pushed far away because the\
+    \ previous layer\u2019s anchor is in a corner.\n\n2. **Communication volume ignored**\
+    \  \n   The mapper treats all layer\u2011to\u2011layer edges equally. A convolutional\
+    \ layer that produces a huge activation tensor is placed with the same priority\
+    \ as a tiny fully\u2011connected layer. Because the cost model uses only hop distance,\
+    \ not `distance \xD7 bytes`, high\u2011volume edges are not co\u2011located, inflating\
+    \ latency.\n\n3. **Fragmentation leads to scattered placement**  \n   When a layer\
+    \ doesn\u2019t fit on one chiplet, the code consumes the nearest chiplet\u2019\
+    s *entire* remaining capacity, then moves to the next nearest, etc. This can spread\
+    \ a single layer\u2019s weights across chiplets that are far apart (because distance\
+    \ ordering is used, not spatial compactness), creating broadcast/all\u2011reduce\
+    \ patterns that traverse the whole mesh.\n\n4. **Only one previous layer\u2019\
+    s anchor is used**  \n   For layers with multiple predecessors (e.g., in residual\
+    \ connections), the mapper ignores all but the last\u2011mapped parent. This completely\
+    \ breaks locality in multi\u2011path networks.\n\n5. **First\u2011layer seed is\
+    \ arbitrary**  \n   The initial chiplet is chosen only by most available memory,\
+    \ then by an unused \u201Cperformance\u201D metric. The 4 IO chiplets at the mesh\
+    \ corners are never considered, so input activations from DRAM and final outputs\
+    \ may have to cross the entire die.\n\n6. **No load\u2011balancing or congestion\
+    \ awareness**  \n   It fills one chiplet completely before touching another, creating\
+    \ hot spots and leaving many chiplets idle. In non\u2011pipelined execution, the\
+    \ worst\u2011case hop count between any two dependent layers dominates latency,\
+    \ but the mapper never tries to bound this maximum.\n\n---\n\n### 2. Specific\
+    \ improvement opportunities given this config\n\n- **Global placement with a communication\
+    \ graph**  \n  The DNN\u2019s layers form a directed acyclic graph (DAG). We can\
+    \ build a weighted graph where nodes are layers (or potential partitions) and\
+    \ edge weights are activation sizes. Then solve a floorplanning / quadratic placement\
+    \ problem to assign nodes to chiplet locations, minimizing `\u03A3 distance \xD7\
+    \ activations`.\n\n- **Activation\u2011weighted proximity**  \n  Modify the cost\
+    \ function to `Manhattan distance * output_activation_size`. This directly pulls\
+    \ together heavy communication pairs.\n\n- **IO\u2011aware seeding and termination**\
+    \  \n  Place the first layer near an input IO chiplet (e.g., nearest available\
+    \ chiplet to the top\u2011left corner) and the final layer near an output IO chiplet.\
+    \ For VGG16, this shortens the data\u2011transfer paths to/from DRAM.\n\n- **Contiguous\
+    \ region allocation**  \n  Use a BFS flood\u2011fill from a seed that respects\
+    \ the model\u2019s natural order, only spilling into distance\u20112 neighbours\
+    \ when capacity forces it. This keeps the entire model inside a compact sub\u2011\
+    mesh and reduces average latency.\n\n- **Partition layers that span multiple chiplets\
+    \ with spatial clustering**  \n  When a layer must be split, use a clustering\
+    \ algorithm to assign the layer\u2019s weight chunks to a *set* of nearby chiplets\
+    \ that are also close to its producers/consumers, instead of greedily filling\
+    \ the nearest available chiplet.\n\n- **Min\u2011max formulation for non\u2011\
+    pipelined execution**  \n  Since layers execute sequentially, minimize the *worst\u2011\
+    case* (distance \xD7 bytes) across all adjacent layers. This can be trivially\
+    \ approximated by a global optimization that penalises large distances proportionally.\n\
+    \n---\n\n### 3. Data/signals the mapper currently ignores that it should use\n\
+    \n| Ignored Signal               | Where it exists                         | How\
+    \ it could improve placement |\n|-------------------------------|-----------------------------------------|----------------------------------|\n\
+    | **Activation tensor sizes**   | `layer_info['input_activation']`        | Weight\
+    \ edges in the communication graph; co\u2011locate heavy edges. |\n| **Full layer\
+    \ DAG**            | Entire `model_metrics` list             | Look ahead/behind\
+    \ to place layers near *all* their predecessors/successors. |\n| **IO chiplet\
+    \ positions**      | `system.is_io_chiplet(id)`              | Steer first/last\
+    \ layer placement to minimise DRAM\u2011network latency. |\n| **Output channel\
+    \ counts**     | `layer_info['out_channels']`            | Estimate volume of\
+    \ data flowing *out* of a layer; used for weighted distance. |\n| **Network bandwidth\
+    \ / injection rate** | `simulation.hardware_parameters`   | Could inform congestion\u2011\
+    aware placement, but not essential. |\n| **Chiplet \u201Cperformance\u201D metric**\
+    \ | `chiplet_network.nodes` (likely unused) | Dead data; the mapper should ignore\
+    \ it or define a meaningful metric. |\n| **Layer splitting effect on communication**\
+    \ | Not captured                          | Splitting a layer turns a unicast\
+    \ into a multicast to all consumers, increasing traffic quadratically; the mapper\
+    \ should penalise fragmentation. |\n\n---\n\n## Proposed Different Optimization\
+    \ Strategy\n\nGiven that the previous attempt (`nearest_neighbor_v3`) yields no\
+    \ improvement and high latency (707\u202F190.9), a fundamentally different placement\
+    \ algorithm is required. The new strategy will be a **communication\u2011volume\u2011\
+    aware, global graph partitioner** that respects weight\u2011storage capacity and\
+    \ mesh topology.\n\n### Strategy: **Weighted Graph Partitioning with Recursive\
+    \ Bipartitioning**\n\nThe core idea is to treat the DNN as a weighted DAG, split\
+    \ it into layer groups that fit within chiplet capacity, then assign those groups\
+    \ to mesh regions using a top\u2011down bipartitioning that minimizes cross\u2011\
+    region communication volume.\n\n#### Steps (to be implemented as a new mapper\
+    \ method, e.g., `_weighted_spectral_mapper`):\n\n1. **Build an extended communication\
+    \ graph**  \n   - Nodes: all layers from the workload (VGG16).  \n   - Edges:\
+    \ for each layer `i` that feeds layer `j`, add a directed edge with weight = `output_activation_size(i)`.\
+    \  \n   - (Optionally, add pseudo\u2011edges from input IO to first layer and\
+    \ from last layer to output IO, with weights equal to the respective external\
+    \ data volumes.)\n\n2. **Estimate chiplet capacity in a common unit**  \n   -\
+    \ For all chiplets, compute `capacity_units` = total weight storage (bytes). For\
+    \ CMOS, this is 2.46\u202FM weights \xD7 bits_per_weight / 8.  \n   - The mapper\
+    \ must ensure the sum of layer weights assigned to a chiplet \u2264 capacity.\
+    \  \n   - Layers larger than a single chiplet must be partitioned (see Step 5).\n\
+    \n3. **Perform recursive bipartitioning of the DAG**  \n   - Recursively split\
+    \ the set of layers into two subsets of approximately equal total weight (or to\
+    \ match the capacity of halves of the mesh), minimising the total weight of edges\
+    \ crossing the cut.  \n   - Each split corresponds to a vertical or horizontal\
+    \ bisection of the mesh (10\xD710 \u2192 2\xD75\xD710, etc.).  \n   - Use a spectral\
+    \ partitioner (e.g., Fiedler vector) or a Kernighan\u2011Lin style algorithm to\
+    \ find the cut with minimal edge\u2011weight crossing. This effectively co\u2011\
+    locates communicating layers.\n\n4. **Map sub\u2011partitions to physical chiplet\
+    \ regions**  \n   - After log\u2082(100) \u2248 7 bisections, the original 10\xD7\
+    10 mesh is divided into leaf regions of 1\u20132 chiplets. Assign each leaf subgraph\
+    \ to the chiplet(s) in that region.  \n   - If a leaf subgraph still contains\
+    \ more weights than the chiplet capacity, split layers further (see next step).\
+    \  \n   - Rotate the cut direction (alternate horizontal/vertical) to keep regions\
+    \ square\u2011ish.\n\n5. **Layer partitioning for oversized layers**  \n   - For\
+    \ any single layer whose weight count exceeds a chiplet\u2019s capacity, split\
+    \ it along the output channel dimension (as the current `LayerPartitioner` already\
+    \ does) across a *set* of chiplets that belong to the same partitioned region.\
+    \  \n   - The split is performed *before* final assignment, so the partitioner\
+    \ treats each channel chunk as a separate node with edges to its producers/consumers\
+    \ duplicated.  \n   - Ensure that all chunks of the same layer are placed on chiplets\
+    \ that are as close as possible (within the same partition leaf or adjacent leaves).\n\
+    \n6. **IO\u2011aligned seeding**  \n   - During the first bisection, bias the\
+    \ partition to place the set containing input layers near the input IO chiplet\
+    \ corner, and the set containing output layers near an output IO corner. This\
+    \ can be done by artificially increasing the weight of the edge from the first\
+    \ layer to the input IO.\n\n7. **Post\u2011placement reshuffling (local search)**\
+    \  \n   - After initial assignment, perform a few rounds of simulated annealing\
+    \ / pairwise swaps of layer chunks between chiplets within a small radius to further\
+    \ reduce `\u03A3 distance \xD7 activations` while respecting capacities. This\
+    \ smooths out imperfections from the top\u2011down cut.\n\n### Expected Impact\n\
+    \n- **Locality**: By minimising edge\u2011cut weight at each bipartition, heavy\
+    \ communication edges are pulled inside small mesh regions, slashing multi\u2011\
+    hop transfers.\n- **Capacity\u2011aware**: The recursive split naturally balances\
+    \ weight across chiplet groups.\n- **IO proximity**: Inputs/outputs travel short\
+    \ distances, reducing DRAM\u2011related latency.\n- **Reduced fragmentation**:\
+    \ Layers are partitioned only when unavoidable, and their pieces stay spatially\
+    \ clustered.\n- **Scalable**: Works for any mesh size and can be adapted to other\
+    \ DNNs.\n\nThis strategy directly addresses the weaknesses of the current greedy\
+    \ mapper and is tailored to the non\u2011pipelined, weight\u2011stationary CMOS\
+    \ setting. Implementation would reside in a new mapper function in `ModelMapper`,\
+    \ called via `mapping_function=\"weighted_spectral_mapper\"`, and would utilise\
+    \ `system.chiplet_network` for distances, `layer_info` for weights and activations,\
+    \ and `system.chiplets` for capacity."
+  function_name: my_optimized_mapper
+  improvement_pct:
+    comm_latency: -133.49895387691046
+    compute_latency: -6273.968934118908
+    total_latency: -138.5257100093111
+  iteration: 2
+  metrics:
+    comm_latency: 691720.64
+    compute_latency: 15470.26
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_imc_heavy_my_optimized_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 691720.64
+        compute_latency: 15470.26
+        total_latency: 707190.9
+    results_label: vgg16_hetero_imc_heavy_my_optimized_mapper
+    total_latency: 707190.9
+  outcome: NO_IMPROVEMENT
+- function_name: communication_aware_global_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "## Proposed New Mapper: `_communication_aware_global_mapper`\n\n\
+    Given the crippling latency of **707190.9 cycles** and the total failure of the\
+    \ greedy nearest-neighbor approach to improve, we must abandon incremental fixes.\
+    \ The core reason is that `_nearest_neighbor_mapper_v3` treats placement as a\
+    \ sequence of local, capacity\u2011driven decisions **without any model of data\
+    \ movement cost**. In a non\u2011pipelined, weight\u2011stationary execution on\
+    \ a 10\xD710 mesh, latency is dominated by the **sum of (hop distance \xD7 activation\
+    \ volume)** across all adjacent layer pairs. The mapper must explicitly minimise\
+    \ this quantity while respecting per\u2011chiplet weight capacities.\n\nThe new\
+    \ mapper employs a **communication\u2011volume\u2011aware, top\u2011down recursive\
+    \ bipartitioning of the DNN\u2019s layer graph**, directly embedding the placement\
+    \ into the physical mesh. This is a well\u2011known technique in VLSI floorplanning\
+    \ and parallel processing, and it directly solves the shortcomings listed in the\
+    \ analysis.\n\n---\n\n### Algorithm Overview\n\n1. **Build the Weighted Communication\
+    \ Graph**  \n   - Nodes: every layer in the workload (VGG16).  \n   - Directed\
+    \ edges: from layer `i` to layer `j` if `j` consumes `i`\u2019s output.  \n  \
+    \ - Edge weight = number of bytes of the output activation of layer `i` (derived\
+    \ from `input_activation` of the next layer or computed from dimensions).  \n\
+    \   - Add two pseudo\u2011nodes, `IN_IO` and `OUT_IO`, connected to the first\
+    \ layer and from the last layer respectively, with weights equal to the input\
+    \ image size and final output size. This anchors the placement to the I/O chiplets.\n\
+    \n2. **Normalise Layer Weights to Chiplet Capacity**  \n   - For each layer, compute\
+    \ its total weight storage requirement (in weight units, as already done by `_calculate_layer_requirements`).\
+    \  \n   - The total system weight capacity is 96 chiplets \xD7 2.46\u202FM weights\
+    \ \xD7 bits_per_weight/8.  \n   - If any layer exceeds a single chiplet\u2019\
+    s capacity, pre\u2011partition it along output channels into roughly equal\u2011\
+    sized chunks. Each chunk becomes a separate node in the graph, with edges duplicated\
+    \ from the original predecessors and to all successors (since a split layer forces\
+    \ all consumers to receive from all chunks). This turns the fragmentation into\
+    \ a graph\u2011partitioning problem that will keep the chunks close.\n\n3. **Recursive\
+    \ Bipartitioning onto the Mesh**  \n   - The 10\xD710 mesh is recursively bisected:\
+    \ first horizontally (top 5 rows vs. bottom 5 rows), then vertically, alternating.\
+    \  \n   - At each step, the current sub\u2011mesh has a set of chiplets with total\
+    \ capacity `C`. The sub\u2011set of layers (nodes) assigned to this region is\
+    \ bipartitioned into two subsets `A` and `B` such that:  \n     * **Capacity balance**:\
+    \ the total weight of `A` is as close as possible to half of `C`, and same for\
+    \ `B`.  \n     * **Minimum edge\u2011cut weight**: the sum of edge weights crossing\
+    \ from `A` to `B` (including edges to nodes already assigned to other regions)\
+    \ is minimised.  \n   - This minimises the total volume of activations that must\
+    \ traverse the cut, which directly translates to minimising the latency contribution\
+    \ of hops across that bisection line.  \n   - The bipartitioning can be solved\
+    \ using spectral graph theory (Fiedler vector) or an iterative Kernighan\u2013\
+    Lin algorithm that works on weighted hypergraphs. Because the number of nodes\
+    \ is small (VGG16 has ~21 layers), even an exact branch\u2011and\u2011bound with\
+    \ a cut\u2011weight lower bound is feasible.\n\n4. **Mapping Partitioned Sets\
+    \ to Chiplet Regions**  \n   - After ~7 bisections (log\u2082 100 \u2248 6.6),\
+    \ each leaf region contains 1\u20132 chiplets. The set of layer chunks assigned\
+    \ to that leaf is mapped to those specific chiplets, respecting the capacity that\
+    \ was used during partitioning.  \n   - If a leaf has two chiplets and the set\
+    \ still exceeds one chiplet\u2019s capacity, a simple greedy bin\u2011packing\
+    \ within the pair completes the assignment.\n\n5. **Post\u2011Placement Local\
+    \ Refinement**  \n   - Perform a few hundred iterations of simulated annealing:\
+    \  \n     * **Move**: swap two layer chunks between nearby chiplets (within Manhattan\
+    \ distance \u2264 2).  \n     * **Cost function**: total weighted communication\
+    \ cost = `\u03A3 (hop_distance \xD7 activation_bytes)` over all edges plus a penalty\
+    \ for exceeding capacity.  \n     * **Temperature schedule**: exponential decay.\
+    \  \n   - This polishes out any sub\u2011optimalities from the top\u2011down cuts\
+    \ without altering the global structure.\n\n6. **Output Format**  \n   - Once\
+    \ all layer chunks are assigned, the mapper produces the same `action` array format\
+    \ expected by the system (percentage of each layer on each chiplet). For layers\
+    \ that were split into multiple chunks, the percentages are aggregated.\n\n---\n\
+    \n### Why This Addresses the Weaknesses\n\n| Weakness | How the New Mapper Fixes\
+    \ It |\n|----------|-----------------------------|\n| Greedy, myopic placement\
+    \ | Global bipartitioning considers all layers simultaneously. |\n| Communication\
+    \ volume ignored | Edge weights explicitly model activation sizes; cut minimises\
+    \ total data movement. |\n| Fragmentation / scattered placement | Pre\u2011partitioning\
+    \ turns splitting into graph nodes; bipartitioning keeps chunks spatially clustered.\
+    \ |\n| Only one predecessor anchor used | The graph includes all predecessors;\
+    \ the partitioner balances closeness to *all* producers. |\n| First\u2011layer\
+    \ arbitrary | Pseudo\u2011IO nodes steer the first and last layers toward I/O\
+    \ chiplets. |\n| No load balancing | Capacity balance constraint prevents hot\u2011\
+    spots. |\n| IO chiplets ignored | Pseudo\u2011edges anchor the whole placement\
+    \ to the I/O corners. |\n\n---\n\n### Expected Impact on Latency\n\nIn a non\u2011\
+    pipelined, weight\u2011stationary execution, moving the majority of large activations\
+    \ (e.g., VGG16\u2019s early conv layers) over short distances (1\u20132 hops)\
+    \ will dramatically reduce the overall communication time. The recursive bipartitioning\
+    \ directly minimises the sum of `distance \xD7 volume`, which is the exact quantity\
+    \ that dictates runtime. The previous greedy approach produced a latency of ~707k\
+    \ cycles largely because critical activations were traversing 5\u201310 hops;\
+    \ this new mapper should shrink the average hop distance to 2\u20133, potentially\
+    \ cutting latency by **50\u201370%**.\n\n---\n\n### Implementation Notes\n\n-\
+    \ The new mapper will be added as a method `_communication_aware_global_mapper`\
+    \ in `ModelMapper` and registered under a name like `\"global_comm_aware\"`.\n\
+    - The recursive partitioning requires the weighted graph; we can use `networkx`\
+    \ for graph manipulation and `scipy.sparse.linalg.eigsh` for the Fiedler vector\
+    \ (spectral bipartitioning). Alternatively, a simpler Kernighan\u2013Lin implementation\
+    \ is straightforward and does not require external libraries.\n- The mapper will\
+    \ compute the entire model placement in one call (not layer\u2011by\u2011layer\
+    \ as `generate_mapping` currently does). The `generate_mapping` method will be\
+    \ modified to support a \u201Cglobal\u201D mapper that receives all layer metrics\
+    \ at once.\n- Since the previous attempts showed no improvement, we must ensure\
+    \ the new mapper does not simply reproduce the old one; it must be a **different**\
+    \ optimization strategy, which this bipartitioning approach definitely is."
+  function_name: communication_aware_global_mapper
+  improvement_pct:
+    comm_latency: 3.8655295446015057
+    compute_latency: -6224.061637344979
+    total_latency: -1.2328214251190621
+  iteration: 3
+  metrics:
+    comm_latency: 284790.13
+    compute_latency: 15349.13
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_imc_heavy_communication_aware_global_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 284790.13
+        compute_latency: 15349.13
+        total_latency: 300139.26
+    results_label: vgg16_hetero_imc_heavy_communication_aware_global_mapper
+    total_latency: 300139.26
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

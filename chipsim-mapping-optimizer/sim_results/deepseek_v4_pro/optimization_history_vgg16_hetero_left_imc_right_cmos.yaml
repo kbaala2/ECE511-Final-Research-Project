@@ -1,0 +1,364 @@
+baseline_metrics:
+  comm_latency: 296241.43
+  compute_latency: 245.15
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_left_imc_right_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296486.57
+best_metrics:
+  comm_latency: 223057.43
+  compute_latency: 10370.01
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_left_imc_right_cmos_my_optimized_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: vgg16_hetero_left_imc_right_cmos_my_optimized_mapper
+  total_latency: 233427.43
+config: vgg16_hetero_left_imc_right_cmos
+history:
+- function_name: my_optimized_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "### 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\
+    \n**a. Greedy, myopic layer\u2011by\u2011layer placement**  \nEach layer is placed\
+    \ in isolation with no look\u2011ahead to future layers. The algorithm commits\
+    \ to a chiplet selection based solely on the current state, which can fragment\
+    \ memory and strand large amounts of capacity on far\u2011away chiplets. Deep\
+    \ networks like VGG16, with its large early layers and smaller later ones, are\
+    \ particularly vulnerable: heavy early allocations may exhaust nearby chiplets,\
+    \ forcing later layers to use remote nodes or fail entirely even when total capacity\
+    \ is sufficient.\n\n**b. Over\u2011reliance on the previous layer\u2019s maximum\u2011\
+    percentage chiplet**  \nFor all layers after the first, the starting chiplet is\
+    \ fixed to the one that hosted the largest fraction of the preceding layer\u2019\
+    s output channels. This creates a rigid chain that can propagate a poor initial\
+    \ choice across the entire model. If that chiplet sits at a topological edge or\
+    \ is already surrounded by exhausted neighbours, subsequent layers are forced\
+    \ into suboptimal placements regardless of better alternatives.\n\n**c. Distance\
+    \ metric is only hop\u2011count, not weighted by data volume**  \nThe mapper sorts\
+    \ candidates by shortest\u2011path length to the starting chiplet, but completely\
+    \ ignores the size of activation tensors flowing between layers. Two placements\
+    \ with the same hop count but vastly different communication costs (because of\
+    \ different output tensor dimensions) are treated identically, missing opportunities\
+    \ to re\u2011order allocations to reduce actual traffic.\n\n**d. Ignores the full\
+    \ distribution of the previous layer**  \nOnly the single most\u2011occupied chiplet\
+    \ is used to anchor the next layer. In reality, a layer\u2019s output partitions\
+    \ are spread across multiple chiplets (e.g., 40% on A, 30% on B, 30% on C). The\
+    \ next layer\u2019s input must collect data from **all** of them, so the optimal\
+    \ placement should minimise the distance to the entire set, weighted by the data\
+    \ volume from each. The current heuristic discards this critical structure.\n\n\
+    **e. Capacity\u2011first, topology\u2011second ordering masks spatial fragmentation**\
+    \  \nThe first layer starts on the chiplet with the largest free memory (plus\
+    \ a small tie\u2011break metric), without regard for network centrality. Subsequent\
+    \ layers always fill the nearest available chiplet until capacity is exhausted.\
+    \ This often fills compact local clusters, leaving large, isolated pockets of\
+    \ capacity far from where later layers would most benefit from them.\n\n**f. Preference\
+    \ for performance/energy is cosmetic**  \nThe `active_metric` stored on network\
+    \ nodes is used only as a tertiary sorting key (after distance and free memory).\
+    \ In practice, its influence on chiplet ranking is negligible, so the mapping\
+    \ is essentially insensitive to the user\u2019s stated performance/energy\u2011\
+    efficiency preference.\n\n---\n\n### 2. Specific Opportunities for Improvement\
+    \ Given This Config\n\n**a. Cluster\u2011based, region\u2011growing placement**\
+    \  \nWith a 10\xD710 mesh of 96 homogeneous CMOS compute chiplets and 4 corner\
+    \ I/Os, a natural improvement is to place the entire VGG16 model in a compact,\
+    \ contiguous region. For example, start at a central chiplet and grow a breadth\u2011\
+    first \u201Cblob\u201D for all layers, only expanding outward when internal capacity\
+    \ is exhausted. This drastically reduces average hop\u2011distance for inter\u2011\
+    layer communication and avoids fragmented islands of free capacity.\n\n**b. Weighted\
+    \ centroid for inter\u2011layer placement**  \nFor each layer, compute the **centroid**\
+    \ (center of mass) of the previous layer\u2019s chiplet distribution, weighted\
+    \ by the partition percentages. Use that centroid as the starting point for the\
+    \ next layer\u2019s nearest\u2011neighbour search, rather than the single max\u2011\
+    percentage chiplet. This directly minimises the total activation traffic, which\
+    \ is the dominant communication cost in weight\u2011stationary mode.\n\n**c. Global\
+    \ planning for VGG16\u2019s known structure**  \nVGG16 has large early convolutional\
+    \ blocks followed by huge fully\u2011connected layers. A one\u2011pass allocator\
+    \ can reserve the highest\u2011capacity chiplets for the FC layers (which have\
+    \ the most weights) and map the smaller\u2011weight early layers to perimeter\
+    \ chiplets, keeping the core free for later demands. This can be implemented as\
+    \ a simple two\u2011phase strategy: first, estimate total capacity needed per\
+    \ layer group; second, pre\u2011assign regions of the mesh to each group.\n\n\
+    **d. Activate the weight\u2011stationary hint**  \nBecause `weight_stationary:\
+    \ true`, weights never move after loading. The mapper should therefore prioritise\
+    \ minimising activation communication. It could directly use per\u2011layer output\
+    \ tensor sizes (input_activation dimensions) when computing weighted distances,\
+    \ favouring chiplet assignments that keep large activation flows short.\n\n**e.\
+    \ Use mesh coordinates for smarter \u201Cseed\u201D selection**  \nInstead of\
+    \ starting at the chiplet with the most free memory, select a central node (e.g.,\
+    \ one with minimal average Manhattan distance to all other compute chiplets) for\
+    \ the first layer. This statistically reduces the chance that the entire mapping\
+    \ drifts toward a corner and isolates capacity.\n\n---\n\n### 3. Data/Signals\
+    \ the Mapper Currently Ignores That It Should Use\n\n| Ignored Data | Why It Matters\
+    \ |\n|-------------|----------------|\n| **Activation tensor sizes** (height,\
+    \ width, channels) of each layer | Communication cost is proportional to activation\
+    \ volume, not just hop count. Large tensors should be kept close together across\
+    \ consecutive layers. |\n| **Full chiplet distribution of the previous layer**\
+    \ (all chiplet IDs and their percentages) | The next layer needs data from **all**\
+    \ previous partitions. Using the weighted centroid or minimum\u2011spanning\u2011\
+    tree distance to the whole set reduces total traffic. |\n| **Future layer resource\
+    \ requirements** (weight/weight\u2011unit counts of upcoming layers) | Enables\
+    \ reservation of suitable chiplets for large layers (e.g., VGG16\u2019s FC layers)\
+    \ and avoids stranding capacity that will be needed later. |\n| **Chiplet physical\
+    \ positions (x,y coordinates) and network centrality** | Central nodes minimise\
+    \ average hop distance to the rest of the mesh, making them better seeds for the\
+    \ first layer and for any layer that will later be widely connected. |\n| **Dataflow\
+    \ mode (weight\u2011stationary)** | In weight\u2011stationary mode, activation\
+    \ movement dominates. The mapper could explicitly optimise for multicast or reduction\
+    \ patterns rather than treating network distance uniformly. |\n| **Detailed link\
+    \ bandwidth/latency information** (from the YAML chiplet mapping or mesh definition)\
+    \ | While the simulation uses Garnet with a fixed flit size, the mapper could\
+    \ pre\u2011compute link capacities to avoid congesting low\u2011bandwidth edges,\
+    \ even on a simple mesh where all links are equal. |\n| **Output channel partitioning\
+    \ granularity** | The layer partitioner splits output channels proportionally,\
+    \ but the mapper does not evaluate whether a coarser or finer split would pack\
+    \ better into available capacity units, leading to unused crossbar rows/columns\
+    \ and potential mapping failures. |\n\nBy incorporating these signals, the mapper\
+    \ could evolve from a simplistic nearest\u2011neighbor heuristic into a topology\u2011\
+    \ and traffic\u2011aware placement tool that is far more robust for large, deep\
+    \ networks like VGG16 on a 10\xD710 mesh."
+  function_name: my_optimized_mapper
+  improvement_pct:
+    comm_latency: -0.18091662601007955
+    compute_latency: -5854.4850091780545
+    total_latency: -5.021552915533402
+  iteration: 1
+  metrics:
+    comm_latency: 296777.38
+    compute_latency: 14597.42
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_left_imc_right_cmos_my_optimized_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 296777.38
+        compute_latency: 14597.42
+        total_latency: 311374.8
+    results_label: vgg16_hetero_left_imc_right_cmos_my_optimized_mapper
+    total_latency: 311374.8
+  outcome: NO_IMPROVEMENT
+- function_name: my_optimized_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "### 1. Key Weaknesses of the Current Nearest-Neighbour Approach\
+    \ (Recap)\n\nThe `_nearest_neighbor_mapper_v3` suffers from **layer\u2011by\u2011\
+    layer myopia**, **propagation of a poor initial seed**, and **fragmentation driven\
+    \ by a shifting anchor**.  \n- After the first layer, the \u201Cstarting chiplet\u201D\
+    \ is always the one that held the largest fraction of the **previous** layer\u2019\
+    s output channels.  \n- This causes the spatial centre of the mapping to drift\
+    \ with every layer, especially when a layer is heavily split or when the maximum\u2011\
+    percentage chiplet lies at the border of the mesh.  \n- Consequently, even though\
+    \ each layer\u2019s allocations are individually near\u2011neighbour\u2013optimal,\
+    \ the global placement spreads across the mesh, increasing average hop distance\
+    \ for activation traffic and stranding useful capacity in isolated pockets.\n\n\
+    ### 2. Opportunities Given the Homogeneous CMOS Mesh\n\nThe system provides 96\
+    \ identical CMOS compute chiplets on a 10\xD710 mesh, running a weight\u2011stationary,\
+    \ all\u2011at\u2011once weight\u2011loading scheme.  \n- **No heterogeneity**\
+    \ \u2192 the mapper does not need to differentiate chiplet types.  \n- **Weight\u2011\
+    stationary** \u2192 activation communication dominates; keeping all layer partitions\
+    \ within a compact region is paramount.  \n- **VGG16** \u2192 early layers have\
+    \ small weight footprints but large activation volumes; the huge FC layers have\
+    \ enormous weight requirements.  \n\nA simple yet powerful improvement is to **anchor\
+    \ the entire model around a single, central chiplet** and only expand outward\
+    \ when that anchor and its immediate neighbours are exhausted. This creates a\
+    \ contiguous, low\u2011diameter placement \u201Cblob\u201D that minimizes activation\
+    \ movement across the whole network.\n\n### 3. Data the Mapper Currently Ignores\n\
+    \n- **The very concept of a \u201Cmodel anchor\u201D** \u2013 the mapper resets\
+    \ its reference point per layer, discarding the benefit of a persistent, spatially\
+    \ central location.  \n- **The uniform capacity of chiplets** \u2013 because all\
+    \ compute chiplets are identical, the choice of anchor can be made once based\
+    \ on topological centrality without worrying about type\u2011specific constraints.\
+    \  \n- **Total activation volume per layer** \u2013 while not strictly required\
+    \ for a fixed\u2011anchor strategy, using it could further refine which layers\
+    \ should be placed at the core of the blob, but is secondary to fixing the anchor\
+    \ itself.  \n\n### \U0001F527 Proposed Optimization: Fixed Anchor with Controlled\
+    \ Expansion\n\n**Strategy**  \n- Select a **single seed chiplet** for the **entire\
+    \ model** \u2013 the one with the best centrality (minimum average hop distance\
+    \ to all other compute chiplets) and highest available capacity among central\
+    \ nodes.  \n- For **every layer**, start the nearest\u2011neighbour search from\
+    \ this *same seed*.  \n- Only if the seed and all its immediate neighbours (e.g.,\
+    \ distance \u2264 1) are fully occupied does the search radius increase.  \n-\
+    \ This turns the mapping into a **region\u2011growing** process that naturally\
+    \ maintains a tight cluster.\n\n**Concrete code modification in `_nearest_neighbor_mapper_v3`**\
+    \  \n\n```python\ndef _nearest_neighbor_mapper_v3(self, model_layer_info, system,\
+    \ preference,\n                                current_available_crossbars, layer_mappings=None,\n\
+    \                                shortest_paths=None):\n    # ... (beginning unchanged)\n\
+    \    \n    # NEW: Persist a model\u2011level anchor chiplet\n    if not hasattr(self,\
+    \ '_model_anchor_chiplet'):\n        # Compute centrality once for the whole model\n\
+    \        centralities = {}\n        for chiplet_id in available_chiplet_ids:\n\
+    \            dists = shortest_paths[chiplet_id]\n            # average distance\
+    \ to all other compute chiplets\n            avg_dist = sum(d for cid, d in dists.items()\n\
+    \                           if not system.is_io_chiplet(cid)) / (len(compute_indices)\
+    \ - 1)\n            centralities[chiplet_id] = avg_dist\n        # pick most central\
+    \ among those with highest capacity (tie\u2011break by free memory)\n        best_anchor\
+    \ = min(centralities, key=lambda cid: (centralities[cid], -avail_memory_list[cid-1]))\n\
+    \        self._model_anchor_chiplet = best_anchor\n    \n    # For the first layer,\
+    \ use the model anchor; for subsequent layers, still use it\n    if not layer_mappings:\n\
+    \        starting_chiplet = self._model_anchor_chiplet\n    else:\n        # Instead\
+    \ of last layer\u2019s max chiplet, keep the anchor\n        starting_chiplet\
+    \ = self._model_anchor_chiplet\n        # Optionally, if the anchor and its neighbours\
+    \ are completely exhausted,\n        # fall back to the old behaviour as a safety\
+    \ net.\n        # (Simple check: if remaining_capacity[starting_chiplet-1] <=\
+    \ 0 and\n        #  all d=1 neighbours also have capacity <= 0, then pick the\
+    \ old anchor)\n    \n    # ... rest of allocation loop remains identical\n```\n\
+    \n**Why it\u2019s different from the previous attempt**  \nThe prior suggestion\
+    \ proposed **weighted centroids** and **global two\u2011phase pre\u2011reservation**,\
+    \ both of which require non\u2011trivial changes to the mapping pipeline (global\
+    \ layer sizing, forward\u2011looking capacity checks). In contrast, the fixed\u2011\
+    anchor strategy is a **local change** that reuses the existing nearest\u2011neighbour\
+    \ logic, making it far less brittle while directly attacking the root cause of\
+    \ fragmentation: the drifting starting point.\n\n**Expected Impact**  \n- Average\
+    \ communication distance for activations will drop sharply because most layers\
+    \ will reside in a compact radius around the central anchor.  \n- Fewer mapping\
+    \ failures from stranded capacity, as the algorithm grows outward in a controlled\
+    \ fashion.  \n- Implementation risk is minimal; the change can be toggled with\
+    \ a single flag and rolled back if necessary."
+  function_name: my_optimized_mapper
+  improvement_pct:
+    comm_latency: 24.70417456464479
+    compute_latency: -4130.067305731185
+    total_latency: 21.268801483993023
+  iteration: 2
+  metrics:
+    comm_latency: 223057.43
+    compute_latency: 10370.01
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_left_imc_right_cmos_my_optimized_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 223057.43
+        compute_latency: 10370.01
+        total_latency: 233427.43
+    results_label: vgg16_hetero_left_imc_right_cmos_my_optimized_mapper
+    total_latency: 233427.43
+  outcome: IMPROVED
+- function_name: my_optimized_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "### 1. Key Weaknesses of the Current Nearest\u2011Neighbor Approach\n\
+    \nThe core `_nearest_neighbor_mapper_v3` algorithm, even after the fixed\u2011\
+    anchor improvement (Iteration 2), still suffers from a **data\u2011oblivious placement\
+    \ pattern** that inflates activation traffic on the 10\xD710 mesh:\n\n- **No inter\u2011\
+    layer locality preservation**  \n  Each layer is mapped independently: the algorithm\
+    \ always starts from the anchor (Iteration 2) and expands outward. It **never\
+    \ considers which chiplets already hold the previous layer\u2019s partitions**,\
+    \ forfeiting the opportunity to reuse the same physical locations and eliminate\
+    \ network communication between consecutive layers. In VGG16, many consecutive\
+    \ Conv layers have similar dimensions; placing them on the same chiplet where\
+    \ possible would completely avoid activation movement.\n\n- **Excessive layer\
+    \ fragmentation**  \n  The algorithm splits layers across multiple chiplets as\
+    \ soon as one chiplet runs out of capacity, but it does not try to **pack a layer\
+    \ into as few chiplets as possible**. A layer scattered over 5 or 6 chiplets requires\
+    \ multicast of its input activation to all those chiplets and then a reduce of\
+    \ partial outputs for the next layer. In weight\u2011stationary mode, this multicast\
+    \ becomes the dominant cost, and the current mapper inadvertently maximises it\
+    \ by spreading layers thinly.\n\n- **Greedy, capacity\u2011driven expansion ignores\
+    \ communication topology of the current layer**  \n  Chiplets are sorted by (distance\
+    \ from anchor, free memory, metric). Because free memory is the secondary key,\
+    \ a chiplet that is slightly farther but can accommodate the entire layer is often\
+    \ skipped in favour of a nearer chiplet that can only take a fraction. This produces\
+    \ a fragmented layout where a layer\u2019s partitions are scattered across many\
+    \ near\u2011by but insufficiently large nodes, even though a single slightly\u2011\
+    farther chiplet could have co\u2011located the whole computation.\n\n- **The anchor\
+    \ mechanism still allows \u201Cdrift\u201D when the anchor is exhausted**  \n\
+    \  When the anchor and its immediate neighbourhood are full, the algorithm reverts\
+    \ to the farthest ends of the sorted list, which may be in a completely different\
+    \ region of the mesh, leading to isolated islands of computation that communicate\
+    \ over long distances.\n\n### 2. Specific Opportunities for Improvement Given\
+    \ This Config\n\nThe combination of a **homogeneous CMOS compute mesh**, **weight\u2011\
+    stationary mode**, **all\u2011at\u2011once weight loading**, and a **deep feed\u2011\
+    forward network (VGG16)** invites a fundamentally different tactic:  \n**Maximise\
+    \ consecutive\u2011layer colocation and minimise partition fragmentation.**\n\n\
+    - **Colocate subsequent layers on the same chiplets**  \n  After mapping layer\
+    \ *N*, the partitions of *N* reside on a set of chiplets *C<sub>N</sub>*. For\
+    \ layer *N+1*, the mapper should first attempt to place its partitions **exactly\
+    \ on *C<sub>N</sub>***, using whatever capacity remains. Only when those chiplets\
+    \ are completely full should it spill to the nearest neighbours of the set *C<sub>N</sub>*.\
+    \ This directly exploits the weight\u2011stationary property: weights never move,\
+    \ so if two layers reside on the same chiplet, their activations never enter the\
+    \ network at all.\n\n- **Layer packing: try to fit the entire layer on one chiplet**\
+    \  \n  For each layer, compute the required capacity units needed to host it entirely.\
+    \ Sort candidate chiplets by **whether they can hold the whole layer** (capacitors\
+    \ that can fully accommodate get a huge priority boost, then by distance to the\
+    \ layer\u2019s preferred center). This cuts multicast endpoints dramatically for\
+    \ compute\u2011intensive layers. For VGG16\u2019s large FC layers that cannot\
+    \ fit on a single chiplet (they require ~4.9M weights), they will still be split,\
+    \ but the early Conv layers with small weight footprints can often be consolidated\
+    \ on 1\u20132 chiplets.\n\n- **Use the set of previous layer chiplets as a \u201C\
+    warm\u201D starting set**  \n  Instead of a single global anchor, the mapper can\
+    \ maintain a **\u201Cworking set\u201D** \u2013 the chiplets that just processed\
+    \ the previous layer. For the first layer, the working set can be a single central\
+    \ chiplet (as done now). For every subsequent layer, the working set is the union\
+    \ of chiplets that held any partition of the previous layer. The mapping then\
+    \ expands from this set in a minimal\u2011spanning\u2011tree fashion. This ensures\
+    \ that the spatial centre of the model naturally follows the data flow, while\
+    \ still keeping the overall footprint compact.\n\n- **Weight the sorting by capacity\u2011\
+    to\u2011need ratio**  \n  When deciding which chiplet to assign the remaining\
+    \ fraction of a layer, prefer chiplets whose remaining capacity matches the needed\
+    \ fraction closely, to avoid leaving tiny stranded capacities that can\u2019t\
+    \ be used later. This reduces fragmentation of unit capacity and helps future\
+    \ layers fit entirely on a single chiplet.\n\n### 3. Data/Signals the Mapper Currently\
+    \ Ignores That It Should Use\n\n| Ignored Data | Why It Matters |\n|-------------|----------------|\n\
+    | **The exact chiplet IDs of the previous layer\u2019s partitions** (not just\
+    \ the max\u2011percentage one) | Placing the next layer on the same chiplets eliminates\
+    \ activation movement entirely for those partition pairs. |\n| **Whether a single\
+    \ chiplet can hold the whole layer** | Fragmented layouts multiply multicast traffic;\
+    \ packing the layer onto one chiplet removes that layer from the network entirely.\
+    \ |\n| **Remaining capacity after partial allocation of a layer** (stranded fragments)\
+    \ | The mapper could avoid creating tiny, unusable capacity pockets by selecting\
+    \ chiplets whose remaining capacity aligns well with the needed workload, preserving\
+    \ larger contiguous blocks for future layers. |\n| **The exact activation tensor\
+    \ size** (height \xD7 width \xD7 channels) for the current layer | The cost of\
+    \ broadcasting an activation to multiple chiplets is proportional to its volume.\
+    \ The mapper could prioritise keeping large\u2011activation layers (early VGG\
+    \ convs) on fewer, larger chiplets, even if they are slightly farther from the\
+    \ anchor. |\n| **Future large\u2011layer weight requirements** (a simple \u201C\
+    look\u2011ahead\u201D of the model) | VGG16\u2019s FC layers dominate weight capacity.\
+    \ Pre\u2011reserving a handful of central, high\u2011capacity chiplets (e.g.,\
+    \ 4\u20136 nodes) for these layers prevents them from being strangled by early\
+    \ Conv allocations, guaranteeing compact placement of the biggest communication\
+    \ generators. |\n\n### Proposed Improvement Strategy (Different from Iteration\
+    \ 2)\n\n**\u201CColocate & Pack\u201D** \u2013 a locality\u2011first scheme with\
+    \ greedy layer consolidation.\n\n1. **Initialise working set** for layer 0 as\
+    \ {most central chiplet with enough free capacity}.\n2. **For each subsequent\
+    \ layer L**:  \n   a. Calculate how many capacity units are required to host L\
+    \ *entirely*.  \n   b. First, try to place L **fully** on any chiplet from the\
+    \ working set that has enough capacity. If multiple, pick the one with maximum\
+    \ free capacity (to leave room for further colocation).  \n   c. If no single\
+    \ chiplet from the working set can hold L entirely, try to place it on a **subset**\
+    \ of working set chiplets *without involving any new chiplet*. (i.e., partition\
+    \ only within the working set, keep partitions as few as possible).  \n   d. If\
+    \ the working set is insufficient, expand to the **nearest neighbours** of the\
+    \ working set, prioritizing those that can take the largest fraction of the remaining\
+    \ requirement in one shot (to minimise partition count).  \n   e. After placing\
+    \ L, update the working set to be the set of chiplets that actually received partitions\
+    \ of L.  \n\nThis approach does not require a global pre\u2011reservation plan;\
+    \ it is a greedy **data\u2011flow\u2011following expansion** that naturally clusters\
+    \ the entire VGG16 pipeline into a small region while aggressively reducing on\u2011\
+    chip network hops. Because it prioritises complete colocation, activation multicast\
+    \ is minimised and many layers will run entirely within a single chiplet. The\
+    \ computational cost of the mapper itself is negligible, as it only evaluates\
+    \ chiplets in the vicinity of the working set.\n\n**Why it is different from Iteration\
+    \ 2**  \nIteration 2 introduced a fixed global anchor to stop the spatial drift,\
+    \ but still scattered layers uniformly around that anchor without regard for inter\u2011\
+    layer locality. This proposal **replaces the static anchor with a dynamic working\
+    \ set** and adds explicit checks for full\u2011layer packing, directly addressing\
+    \ the communication cost that the weight\u2011stationary config makes paramount."
+  function_name: my_optimized_mapper
+  improvement_pct:
+    comm_latency: -68.06200604689222
+    compute_latency: -693.2367937997143
+    total_latency: -68.57893765643414
+  iteration: 3
+  metrics:
+    comm_latency: 497869.29
+    compute_latency: 1944.62
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_left_imc_right_cmos_my_optimized_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 497869.29
+        compute_latency: 1944.62
+        total_latency: 499813.91
+    results_label: vgg16_hetero_left_imc_right_cmos_my_optimized_mapper
+    total_latency: 499813.91
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

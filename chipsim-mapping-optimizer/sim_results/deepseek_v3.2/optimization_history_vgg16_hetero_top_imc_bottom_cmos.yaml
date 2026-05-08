@@ -1,0 +1,251 @@
+baseline_metrics:
+  comm_latency: 296241.43
+  compute_latency: 242.71
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_top_imc_bottom_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 296484.14
+best_metrics:
+  comm_latency: 267399.25
+  compute_latency: 14745.72
+  metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_top_imc_bottom_cmos_capacity_aware_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: vgg16_hetero_top_imc_bottom_cmos_capacity_aware_nearest_neighbor_mapper
+  total_latency: 282144.97
+config: vgg16_hetero_top_imc_bottom_cmos
+history:
+- function_name: enhanced_quadrant_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the `_nearest_neighbor_mapper_v3` method\
+    \ and the given CHIPSIM configuration, here are the key weaknesses and improvement\
+    \ opportunities:\n\n## 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\
+    \n**A. Memory Fragmentation Due to \"Full Layer\" Fit Requirement**\n```python\n\
+    units_needed_full = self._calculate_layer_requirements(model_layer_info, chiplets[chiplet_idx])\n\
+    units_needed_for_resources = math.ceil(resources_remaining * units_needed_full\
+    \ / crossbars_required)\n```\nThe algorithm attempts to allocate each chiplet's\
+    \ portion as if it must hold a scaled-down **complete** layer, not considering\
+    \ that different chiplets could store different portions of weights. This leads\
+    \ to inefficient capacity utilization, especially with heterogeneous capacity\
+    \ chiplets.\n\n**B. Na\xEFve Distance-Based Sorting Ignores Capacity-Distance\
+    \ Tradeoffs**\n```python\nchiplet_info.sort(key=lambda x: (x[1], -x[2], -x[3]))\n\
+    ```\nThe primary sort key is Manhattan distance, which doesn't account for:\n\
+    - Network congestion patterns in the 10x10 mesh\n- Capacity-constrained routing\
+    \ (some chiplets might be farther but have abundant capacity)\n- The 4 I/O chiplets\
+    \ at corners creating asymmetric communication patterns\n\n**C. Greedy Sequential\
+    \ Allocation Without Global Optimization**\nEach layer is mapped independently\
+    \ based only on the previous layer's location, without considering:\n- Future\
+    \ layer requirements\n- Global load balancing across the 96 CMOS chiplets\n- Inter-layer\
+    \ communication patterns in VGG16 (significant dataflow between layers)\n\n**D.\
+    \ Insufficient Handling of Heterogeneous Capacity**\nThe config has 96 CMOS chiplets\
+    \ with 2.46M weights each, but the algorithm treats all compute chiplets identically\
+    \ in the distance calculation, missing opportunities to:\n- Place larger layer\
+    \ portions on chiplets with more remaining capacity\n- Create capacity-aware clusters\
+    \ for layer distribution\n\n**E. Layer Partitioning Mismatch with Mapping Logic**\n\
+    The `LayerPartitioner` splits layers along output channels (`output_channels`),\
+    \ but the mapper's resource calculation doesn't consider this partitioning strategy\
+    \ when estimating crossbar requirements, potentially creating inconsistent resource\
+    \ estimations.\n\n## 2. Specific Improvement Opportunities for This Config\n\n\
+    **A. Mesh-Aware Mapping for 10x10 Topology with Corner I/O**\n- **Opportunity**:\
+    \ The 4 I/O chiplets at corners create natural \"quadrants.\" Implement quadrant-based\
+    \ mapping to minimize I/O-to-compute distances.\n- **Implementation**: Group chiplets\
+    \ into 4 quadrants (24 compute chiplets each) and map layers to stay within quadrants\
+    \ when possible.\n\n**B. Capacity-Aware Distance Metric**\n- **Opportunity**:\
+    \ Replace pure Manhattan distance with a weighted metric:\n  ```python\n  # Proposed\
+    \ metric\n  effective_distance = distance * (1 + capacity_penalty_factor)\n  #\
+    \ where capacity_penalty_factor increases as remaining capacity decreases\n  ```\n\
+    \n**C. VGG16-Specific Optimization**\n- **Opportunity**: VGG16 has a regular structure\
+    \ (convolutional blocks followed by FC layers). Implement pattern recognition:\n\
+    \  - Map early conv layers (smaller) near I/O chiplets\n  - Map later layers considering\
+    \ their position in the network graph\n  - Co-locate layers with high inter-layer\
+    \ communication\n\n**D. Batch Layer Mapping for Load Balancing**\n- **Opportunity**:\
+    \ Instead of layer-by-layer greedy allocation, consider multiple layers simultaneously\
+    \ to:\n  - Balance load across all 96 chiplets\n  - Minimize total communication\
+    \ volume\n  - Avoid capacity fragmentation\n\n## 3. Critical Data/Signals Currently\
+    \ Ignored\n\n**A. Network Traffic Patterns**\nThe mapper ignores:\n- Directional\
+    \ bias in VGG16's dataflow (feed-forward with some skip connections)\n- Activation\
+    \ sizes between layers (critical for communication volume)\n- Network contention\
+    \ modeling (4 corner I/O chiplets create hotspots)\n\n**B. Chiplet Utilization\
+    \ History**\nNo tracking of:\n- Historical load patterns\n- Communication hotspot\
+    \ chiplets\n- Thermal considerations (though not modeled in config)\n\n**C. Layer-to-Layer\
+    \ Communication Graph**\nThe VGG16 workload has known communication patterns that\
+    \ could optimize placement:\n- Adjacent layers should be placed close\n- Pooling\
+    \ layers reduce activation size, affecting placement priority\n\n**D. Partial\
+    \ Layer Fitting**\nThe algorithm doesn't support storing different weight portions\
+    \ on different chiplets efficiently. It should allow:\n- Weight matrix partitioning\
+    \ across chiplets (not just output channel splitting)\n- More flexible capacity\
+    \ utilization\n\n**E. Asymmetric I/O Access**\nWith I/O only at corners, chiplets\
+    \ have different access costs to I/O:\n- Corner compute chiplets: 0-1 hops to\
+    \ I/O\n- Center compute chiplets: 4-5 hops to I/O\nThis asymmetry isn't considered\
+    \ in the distance calculation.\n\n**Recommended Improvements:**\n1. **Implement\
+    \ capacity-weighted distance metric**\n2. **Add quadrant-based mapping for corner\
+    \ I/O topology**\n3. **Introduce look-ahead scoring for future layer requirements**\n\
+    4. **Create load-balancing pass after initial greedy placement**\n5. **Add communication\
+    \ volume estimation between layers**\n\nThe current mapper's simplicity makes\
+    \ it fast but suboptimal for the structured VGG16 workload on this large 10x10\
+    \ mesh with corner I/O constraints."
+  function_name: enhanced_quadrant_mapper
+  improvement_pct:
+    comm_latency: -0.17187670205345137
+    compute_latency: -5973.635202505047
+    total_latency: -5.061916634056705
+  iteration: 1
+  metrics:
+    comm_latency: 296750.6
+    compute_latency: 14741.32
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_top_imc_bottom_cmos_enhanced_quadrant_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 296750.6
+        compute_latency: 14741.32
+        total_latency: 311491.92
+    results_label: vgg16_hetero_top_imc_bottom_cmos_enhanced_quadrant_mapper
+    total_latency: 311491.92
+  outcome: NO_IMPROVEMENT
+- function_name: capacity_aware_nearest_neighbor_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on the previous analysis and the fact that **no improvement**\
+    \ was seen with the initial suggestions (likely because they were too complex\
+    \ or didn't address the root cause), I need to propose a **fundamentally different**\
+    \ optimization strategy. Let me identify **specific, targeted weaknesses** in\
+    \ the current nearest-neighbor mapper that are most impactful for this configuration.\n\
+    \n## 1. **Critical Weaknesses in Current Nearest-Neighbor Mapper for This Config**\n\
+    \n**A. Fatal Flaw: Misalignment Between `crossbars_required` and `_calculate_layer_requirements`**\n\
+    ```python\n# In _nearest_neighbor_mapper_v3:\ncrossbars_required = model_layer_info['crossbars_required']\n\
+    units_needed_full = self._calculate_layer_requirements(model_layer_info, chiplets[chiplet_idx])\n\
+    units_needed_for_resources = math.ceil(resources_remaining * units_needed_full\
+    \ / crossbars_required)\n```\n\n**The Problem**: The mapper assumes `units_needed_full`\
+    \ is directly proportional to `crossbars_required`, but:\n1. `crossbars_required`\
+    \ is likely computed once for an **IMC** chiplet\n2. `_calculate_layer_requirements`\
+    \ returns different units for **CMOS** chiplets (weight counts: 2.46M capacity\
+    \ each)\n3. With 96 CMOS chiplets and 4 I/O chiplets, **this proportionality assumption\
+    \ is completely wrong**\n\n**Evidence**: Looking at `_calculate_layer_requirements`:\n\
+    ```python\nif getattr(chiplet, 'type', None) == 'CMOS':\n    # Returns weight\
+    \ count for full layer\n    return weights  # e.g., 1.2M weights\nelse:\n    #\
+    \ Returns crossbar count for full layer  \n    return total_crossbars_layer  #\
+    \ e.g., 150 crossbars\n```\n\nFor CMOS chiplets, the mapper compares apples to\
+    \ oranges:\n- `crossbars_required`: e.g., 150 (from IMC perspective)\n- `units_needed_for_resources`:\
+    \ `math.ceil(resources_remaining * weights / 150)`\nThis makes **no mathematical\
+    \ sense**.\n\n**B. \"Full Layer Fit\" Assumption on CMOS Chiplets**\nThe algorithm\
+    \ tries to allocate `units_needed_for_resources` = `ceil(resources_remaining *\
+    \ weights / crossbars_required)`. For CMOS:\n- `weights` = total weights for full\
+    \ layer (e.g., 1.2M)\n- `crossbars_required` = number of crossbars if layer were\
+    \ on IMC (e.g., 150)\n- Result: It massively **overestimates** what each CMOS\
+    \ chiplet needs to allocate\n\n**Example Calculation**:\n- Layer needs 1.2M weights\
+    \ total\n- `crossbars_required` = 150 (IMC computation)\n- If `resources_remaining`\
+    \ = 100 (100% of layer unmapped)\n- `units_needed_for_resources` = `ceil(100 *\
+    \ 1,200,000 / 150)` = **800,000 weight units**\n- But CMOS chiplet capacity =\
+    \ 2.46M weight units\n- Algorithm thinks it needs 800K/2.46M \u2248 32% of a chiplet's\
+    \ capacity, when the correct amount should be much smaller\n\n**C. Distance-Based\
+    \ Sorting Doesn't Consider CMOS vs IMC Differences**\nThe algorithm sorts by distance,\
+    \ then available memory, then metric. But with **all CMOS chiplets** (96 homogeneous\
+    \ compute units), the distance sort dominates, even when capacity considerations\
+    \ should be primary.\n\n## 2. **Specific Opportunities for Improvement Given This\
+    \ Config**\n\n**Opportunity 1: Fix the Capacity Unit Calculation for CMOS**\n\
+    **Root Cause**: The mapping logic was designed for IMC chiplets but is being used\
+    \ with CMOS chiplets.\n\n**Solution**: In CMOS mode, the mapper should:\n1. Track\
+    \ weight capacity, not crossbars\n2. Use a consistent unit system\n\n**Proposed\
+    \ Fix**:\n```python\ndef _cmos_nearest_neighbor_mapper(self, model_layer_info,\
+    \ system, preference, \n                                  current_available_capacity,\
+    \ ...):\n    # current_available_capacity is in weight units for CMOS\n    # No\
+    \ need for crossbars_required conversion\n    weights_needed_total = self._calculate_layer_requirements(model_layer_info,\
+    \ chiplets[0])\n    \n    # Direct weight-based allocation\n    weight_units_remaining\
+    \ = weights_needed_total\n    percentage_remaining = 100\n    \n    for chiplet_id\
+    \ in sorted_chiplets_ids:\n        available_weight_units = remaining_capacity[chiplet_idx]\n\
+    \        \n        # Direct weight calculation without crossbar conversion\n \
+    \       if available_weight_units >= weight_units_remaining:\n            # Allocate\
+    \ remaining weights\n            alloc_percentage = percentage_remaining\n   \
+    \         remaining_capacity[chiplet_idx] -= weight_units_remaining\n        \
+    \    weight_units_remaining = 0\n        else:\n            # Allocate what's\
+    \ available\n            alloc_percentage = (available_weight_units * 100) / weights_needed_total\n\
+    \            remaining_capacity[chiplet_idx] = 0\n            weight_units_remaining\
+    \ -= available_weight_units\n        \n        action[chiplet_idx] += alloc_percentage\n\
+    \        percentage_remaining -= alloc_percentage\n```\n\n**Opportunity 2: Implement\
+    \ Weight-Based Load Balancing**\nWith 96 homogeneous CMOS chiplets (2.46M weights\
+    \ each), we should:\n1. Treat weight capacity as the primary resource\n2. Balance\
+    \ weight allocation across chiplets\n3. Consider total system weight capacity\
+    \ vs layer requirements\n\n**Opportunity 3: Simple Capacity-First Mapping**\n\
+    For this specific config (96 CMOS, mesh topology), distance is **less important**\
+    \ than capacity utilization because:\n- All compute chiplets are homogeneous\n\
+    - Mesh provides many equal-distance paths\n- Balancing load prevents fragmentation\n\
+    \n**Proposed Algorithm Change**:\n```python\n# Instead of: chiplet_info.sort(key=lambda\
+    \ x: (x[1], -x[2], -x[3]))\n# Use: chiplet_info.sort(key=lambda x: (-x[2], x[1],\
+    \ -x[3]))  # Capacity first, then distance\n```\n\n## 3. **What Data the Mapper\
+    \ Should Use But Doesn't**\n\n**A. Chiplet Type Information**\nThe mapper doesn't\
+    \ distinguish between CMOS and IMC chiplets in its allocation logic, even though:\n\
+    - CMOS chiplets store weights (2.46M capacity)\n- IMC chiplets store weights in\
+    \ crossbars (different capacity units)\n- The current code treats them identically,\
+    \ causing unit mismatch\n\n**B. Actual Resource Requirements vs Available**\n\
+    The mapper should track:\n- Total weight requirements per layer\n- Weight capacity\
+    \ per CMOS chiplet (2.46M)\n- Percentage of chiplet used per layer portion\n-\
+    \ Fragmentation metric (small leftover capacities)\n\n**C. Topological Symmetry\
+    \ for Load Balancing**\nWith 96 CMOS on 10x10 mesh (excluding 4 corner I/O):\n\
+    - The mesh has symmetry that allows regular load distribution\n- Current algorithm\
+    \ creates irregular patterns due to sequential greedy allocation\n- Should use\
+    \ structured mapping patterns (like checkerboard or tiling)\n\n## **Recommended\
+    \ New Strategy**\n\n**Implement \"Capacity-Aware CMOS Mapper\"**:\n\n1. **Fix\
+    \ the unit calculation bug** - Remove crossbar-based scaling for CMOS\n2. **Implement\
+    \ weight-first allocation** - Sort by available weight capacity first\n3. **Add\
+    \ structured load balancing** - Use geometric patterns for 10x10 mesh\n\n**Specific\
+    \ Code Changes**:\n\n```python\ndef _cmos_nearest_neighbor_mapper_v3(self, model_layer_info,\
+    \ system, preference, \n                                     current_available_capacity,\
+    \ ...):\n    \"\"\"\n    Specialized mapper for CMOS-only systems like 96 CMOS\
+    \ chiplets.\n    Uses weight units directly, no crossbar conversion.\n    \"\"\
+    \"\n    # Get total weight requirement once\n    if not hasattr(self, '_layer_weight_cache'):\n\
+    \        self._layer_weight_cache = {}\n    \n    layer_key = model_layer_info['name']\n\
+    \    if layer_key not in self._layer_weight_cache:\n        # Calculate using\
+    \ first compute chiplet as reference\n        first_cmos = next((c for c in system.chiplets\
+    \ \n                          if getattr(c, 'type', None) == 'CMOS'), None)\n\
+    \        self._layer_weight_cache[layer_key] = \\\n            self._calculate_layer_requirements(model_layer_info,\
+    \ first_cmos)\n    \n    total_weights_needed = self._layer_weight_cache[layer_key]\n\
+    \    \n    # Sort chiplets by available capacity (highest first), then distance\n\
+    \    chiplet_info = []\n    for chiplet_id in available_chiplet_ids:\n       \
+    \ idx = chiplet_id - 1\n        if system.chiplets[idx].type == 'CMOS':  # CMOS-specific\n\
+    \            available_weight_units = current_available_capacity[idx]\n      \
+    \      distance = distances.get(chiplet_id, math.inf)\n            chiplet_info.append((chiplet_id,\
+    \ available_weight_units, distance))\n    \n    # CAPACITY-FIRST sort: highest\
+    \ available capacity first\n    chiplet_info.sort(key=lambda x: (-x[1], x[2]))\n\
+    \    \n    # Direct weight allocation (no crossbar conversion)\n    weight_remaining\
+    \ = total_weights_needed\n    percentage_remaining = 100\n    \n    for chiplet_id,\
+    \ available_weights, _ in chiplet_info:\n        if weight_remaining <= 0:\n \
+    \           break\n            \n        chiplet_idx = chiplet_id - 1\n      \
+    \  alloc_weights = min(available_weights, weight_remaining)\n        alloc_percentage\
+    \ = (alloc_weights * 100) / total_weights_needed\n        \n        remaining_capacity[chiplet_idx]\
+    \ -= alloc_weights\n        weight_remaining -= alloc_weights\n        action[chiplet_idx]\
+    \ = alloc_percentage\n        percentage_remaining -= alloc_percentage\n    \n\
+    \    # Check if fully allocated (with tolerance for rounding)\n    if weight_remaining\
+    \ > (total_weights_needed * 0.01):  # 1% tolerance\n        return remaining_capacity,\
+    \ None, True, \"INSUFFICIENT_MEMORY\"\n    \n    return remaining_capacity, action,\
+    \ False, None\n```\n\n**Why This Will Work Better**:\n1. **Removes unit mismatch**\
+    \ - Direct weight allocation for CMOS\n2. **Capacity-first** - Better load balancing\
+    \ across 96 homogeneous chiplets\n3. **Simpler** - Fewer conversion errors, more\
+    \ predictable behavior\n4. **Tailored to config** - Optimized for 96 CMOS + 4\
+    \ I/O corner topology\n\n**Expected Improvements**:\n- Better capacity utilization\
+    \ across 96 CMOS chiplets\n- Reduced fragmentation\n- More balanced layer distribution\n\
+    - Elimination of capacity estimation errors\n\nThis addresses the **fundamental\
+    \ mathematical error** in the current mapper while being simpler and more targeted\
+    \ to the specific configuration than previous suggestions."
+  function_name: capacity_aware_nearest_neighbor_mapper
+  improvement_pct:
+    comm_latency: 9.736038608779332
+    compute_latency: -5975.448065592683
+    total_latency: 4.836403728037541
+  iteration: 2
+  metrics:
+    comm_latency: 267399.25
+    compute_latency: 14745.72
+    metrics_file: /home/rbaala2/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_top_imc_bottom_cmos_capacity_aware_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 267399.25
+        compute_latency: 14745.72
+        total_latency: 282144.97
+    results_label: vgg16_hetero_top_imc_bottom_cmos_capacity_aware_nearest_neighbor_mapper
+    total_latency: 282144.97
+  outcome: IMPROVED
+max_iterations: 3
+total_iterations: 2
