@@ -1,0 +1,235 @@
+baseline_metrics:
+  comm_latency: 296737.09
+  compute_latency: 12231.63
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_checkerboard/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 308968.72
+best_metrics:
+  comm_latency: 296725.22
+  compute_latency: 12229.2
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_checkerboard_dataflow_aware_block_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: vgg16_hetero_checkerboard_dataflow_aware_block_mapper
+  total_latency: 308954.42
+config: vgg16_hetero_checkerboard
+history:
+- function_name: mesh_aware_mapper_v1
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the `_nearest_neighbor_mapper_v3` algorithm\
+    \ and the CHIPSIM configuration, here are the key weaknesses and improvement opportunities:\n\
+    \n## 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\n**A. Single-Dimension\
+    \ Spreading Problem**\nThe algorithm spreads layers starting from one chiplet\
+    \ and expanding outward, but this creates:\n- **Uneven communication patterns**:\
+    \ All chiplets communicate with the starting chiplet, creating a star topology\
+    \ rather than efficient mesh communication\n- **Hotspot creation**: The starting\
+    \ chiplet becomes a communication bottleneck\n- **Poor scalability**: As layers\
+    \ grow larger, they spread further from the starting point, increasing communication\
+    \ distances\n\n**B. Lack of Layer Affinity Consideration**\nThe mapper ignores:\n\
+    - **Data dependencies between layers**: Consecutive layers placed far apart increase\
+    \ communication overhead\n- **Layer-to-layer communication patterns**: No consideration\
+    \ for minimizing inter-layer data movement\n- **Pipeline awareness**: Sequential\
+    \ layers should be placed closer together to minimize latency\n\n**C. Resource\
+    \ Fragmentation**\nThe current approach creates:\n- **Suboptimal fragmentation**:\
+    \ By greedily allocating nearest available chiplets, larger layers get fragmented\
+    \ across distant chiplets\n- **Inability to consolidate**: No mechanism to pack\
+    \ related layer partitions onto nearby chiplets\n- **Wasted cross-chiplet communication**:\
+    \ Fragmented layers require more cross-chiplet communication\n\n**D. Static Metric\
+    \ Optimization**\nThe preference system (`performance` vs `energy_efficiency`)\
+    \ is:\n- **Oversimplified**: Binary weighting doesn't capture real trade-offs\n\
+    - **Not adaptive**: Doesn't consider current network congestion or chiplet load\n\
+    - **Missing critical metrics**: Ignores communication volume, data reuse, and\
+    \ thermal considerations\n\n**E. First-Layer Placement Heuristic Issues**\nThe\
+    \ starting chiplet selection uses:\n- **Single-metric optimization**: Only considers\
+    \ available memory and active metric\n- **Ignores topological positioning**: Corner/edge\
+    \ chiplets vs. central chiplets\n- **No workload awareness**: Doesn't consider\
+    \ the full model's communication pattern\n\n## 2. Specific Opportunities for This\
+    \ Configuration\n\n**Given 96 CMOS_Compute chiplets (2.46M weights each) on a\
+    \ 10\xD710 mesh:**\n\n**A. Exploit Mesh Topology Better**\n- **Current**: Simple\
+    \ distance-based spreading\n- **Opportunity**: Use row/column grouping to create\
+    \ communication-efficient blocks\n- **Implementation**: Group chiplets into 4\xD7\
+    4 or 5\xD75 blocks for layer placement\n\n**B. Leverage IO Chiplet Placement**\n\
+    - **Current**: IO chiplets at corners are excluded from computation\n- **Opportunity**:\
+    \ Use them as strategic starting points for data flow\n- **Implementation**: Start\
+    \ placement near IO chiplets for input/output layers\n\n**C. Optimize for VGG16\
+    \ Workload**\n- **VGG16 characteristics**: Many convolutional layers with decreasing\
+    \ spatial dimensions\n- **Opportunity**: Place early conv layers (large feature\
+    \ maps) centrally, later layers peripherally\n- **Implementation**: Layer-aware\
+    \ placement based on communication-to-computation ratio\n\n**D. Weight Stationary\
+    \ Configuration**\n- **Config**: `weight_stationary: true` and `weight_loading_strategy:\
+    \ all_at_once`\n- **Implication**: Weight communication happens once at start\n\
+    - **Opportunity**: Place layers with shared weights nearby to minimize weight\
+    \ duplication\n\n## 3. Critical Data/Signals Currently Ignored\n\n**A. Communication\
+    \ Volume Estimation**\nThe mapper doesn't consider:\n- **Inter-layer data volume**:\
+    \ How much data transfers between layers\n- **Activation sizes**: Large vs small\
+    \ activations affect communication cost\n- **Weight reuse patterns**: Which layers\
+    \ share/common weights\n\n**B. Network Congestion Awareness**\nMissing:\n- **Current\
+    \ link utilization**: No feedback from communication simulator\n- **Hop count\
+    \ optimization**: Minimizing total hops rather than just distance\n- **Traffic\
+    \ pattern consideration**: Avoiding contention in the mesh\n\n**C. Thermal and\
+    \ Power Constraints**\nNo consideration of:\n- **Chiplet power profiles**: CMOS\
+    \ compute chiplets likely have different power characteristics\n- **Thermal hotspots**:\
+    \ Avoiding concentration of compute-intensive layers\n- **Power delivery network\
+    \ constraints**\n\n**D. Model-Specific Patterns**\nFor VGG16:\n- **Symmetry**:\
+    \ Many layers have similar structures\n- **Bottlenecks**: Certain layers dominate\
+    \ computation\n- **Data flow**: Sequential nature with minimal branching\n\n##\
+    \ Recommended Improvements\n\n1. **Add Layer Affinity Scoring**: Compute communication\
+    \ cost between consecutive layers\n2. **Implement Block-Based Placement**: Group\
+    \ chiplets into logical blocks for better locality\n3. **Add Workload-Aware Starting\
+    \ Points**: Analyze model to determine optimal starting chiplets\n4. **Incorporate\
+    \ Communication Volume**: Weight distance by expected data transfer volume\n5.\
+    \ **Implement Lookahead**: Consider next layer's requirements when placing current\
+    \ layer\n6. **Add Consolidation Pass**: Post-process mapping to merge fragmented\
+    \ partitions onto nearby chiplets\n\nThe current mapper's fundamental weakness\
+    \ is treating each layer independently without considering the holistic communication\
+    \ pattern of the entire model, which is particularly problematic for sequential\
+    \ models like VGG16 on a large mesh topology."
+  function_name: mesh_aware_mapper_v1
+  improvement_pct:
+    comm_latency: -0.0203850485963823
+    compute_latency: -0.42283816629509857
+    total_latency: -0.036317592279251104
+  iteration: 1
+  metrics:
+    comm_latency: 296797.58
+    compute_latency: 12283.35
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_checkerboard_mesh_aware_mapper_v1/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 296797.58
+        compute_latency: 12283.35
+        total_latency: 309080.93
+    results_label: vgg16_hetero_checkerboard_mesh_aware_mapper_v1
+    total_latency: 309080.93
+  outcome: NO_IMPROVEMENT
+- function_name: dataflow_aware_block_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the mapper algorithm and your simulation\
+    \ results (no improvement from Iteration 1), here are specific, actionable weaknesses\
+    \ and a new optimization strategy:\n\n## 1. Key Weaknesses of Current `_nearest_neighbor_mapper_v3`\n\
+    \n### **A. Critical Algorithmic Bug: Double Filtering of Available Chiplets**\n\
+    **Location**: Lines 387-400 (two duplicate filtering blocks)\n```python\navailable_chiplet_ids\
+    \ = [idx + 1 for idx, cu in enumerate(remaining_capacity) \n                 \
+    \        if cu > 0 and not self.system.is_io_chiplet(idx + 1)]\n# Apply allowed\
+    \ filter again for the allocation pass\nallowed = None\nif hasattr(self, 'preference')\
+    \ and isinstance(self.preference, dict):\n    allowed = self.preference.get('allowed_chiplet_ids')\n\
+    if allowed:\n    allowed_set = set(allowed)\n    available_chiplet_ids = [cid\
+    \ for cid in available_chiplet_ids if cid in allowed_set]\navailable_chiplet_ids\
+    \ = [idx + 1 for idx, cu in enumerate(remaining_capacity) \n                 \
+    \        if cu > 0 and not self.system.is_io_chiplet(idx + 1)]  # \u2190 DUPLICATE!\n\
+    ```\n**Impact**: This causes inefficient chiplet selection and may exclude valid\
+    \ chiplets from allocation.\n\n### **B. Incorrect \"Nearest Neighbor\" Implementation**\n\
+    **The algorithm doesn't actually perform true nearest-neighbor search**:\n1. **Static\
+    \ distance calculation**: Uses precomputed `shortest_paths` from `starting_chiplet`\n\
+    2. **No dynamic updates**: Doesn't recalculate distances based on where partitions\
+    \ were actually placed\n3. **Single expansion point**: All partitions spread from\
+    \ one starting chiplet\n\n**For VGG16 on 10\xD710 mesh, this creates**:\n- **Massive\
+    \ fragmentation**: Layer 1 spreads radially, leaving fragmented resources\n- **Communication\
+    \ hotspots**: All partitions of Layer 2 communicate with Layer 1's starting chiplet\n\
+    - **Suboptimal placement**: Later layers placed far from their data dependencies\n\
+    \n### **C. Wrong Resource Accounting for CMOS Chiplets**\n**In `_calculate_layer_requirements`**:\n\
+    ```python\nif getattr(chiplet, 'type', None) == 'CMOS':\n    # Compute total weights\
+    \ required for this layer\n    if layer_info['layer_type'] == 'conv':\n      \
+    \  weights = int(layer_info['filter_size']) * int(layer_info['out_channels'])\n\
+    ```\n**Problem**: VGG16 conv layers have `filter_size = in_channels * (kernel\xB2\
+    ) = 3\xD73\xB2 = 27` for first layer, but actual weights = `in_channels \xD7 kernel\xB2\
+    \ \xD7 out_channels = 3\xD79\xD764 = 1728`\n\n**Impact**: Severely underestimates\
+    \ CMOS chiplet requirements \u2192 overloading and mapping failures.\n\n### **D.\
+    \ No Consideration for Your Specific Configuration**\n**Missed opportunities**:\n\
+    - **2.46M weight capacity per CMOS chiplet** \u2192 layers could fit entirely\
+    \ on single chiplets\n- **4 IO chiplets at corners** \u2192 should guide dataflow\
+    \ from edges to center\n- **Weight-stationary, all-at-once loading** \u2192 minimize\
+    \ weight duplication across chiplets\n\n## 2. New Optimization Strategy: **\"\
+    Dataflow-Aware Block Mapping\"**\n\n### **Strategy Overview**\nInstead of radial\
+    \ spreading from a single point:\n1. **Partition mesh into 4 quadrants** (aligned\
+    \ with IO chiplets)\n2. **Map complete layers to quadrant blocks** when possible\n\
+    3. **Use dataflow direction**: early layers \u2192 center, later layers \u2192\
+    \ periphery\n4. **Minimize cross-quadrant communication** for dependent layers\n\
+    \n### **Implementation Modifications**\n\n#### **Modification 1: Fix CMOS Weight\
+    \ Calculation**\n```python\ndef _calculate_layer_requirements(self, layer_info,\
+    \ chiplet):\n    if getattr(chiplet, 'type', None) == 'CMOS':\n        if layer_info['layer_type']\
+    \ == 'conv':\n            # FIXED: filter_size = in_channels * (kernel_size\xB2\
+    )\n            # We need in_channels \xD7 out_channels \xD7 kernel_size\xB2\n\
+    \            kernel_size = 3  # VGG16 uses 3\xD73 kernels\n            in_channels\
+    \ = layer_info.get('in_channels', \n                                        int(layer_info['filter_size'])\
+    \ // (kernel_size * kernel_size))\n            weights = in_channels * int(layer_info['out_channels'])\
+    \ * kernel_size * kernel_size\n```\n\n#### **Modification 2: Quadrant-Aware Nearest\
+    \ Neighbor**\n```python\ndef _quadrant_nearest_neighbor_mapper(self, model_layer_info,\
+    \ system, preference, \n                                     current_available_capacity,\
+    \ layer_mappings=None, \n                                     shortest_paths=None):\n\
+    \    # 1. Divide 10\xD710 mesh into 4 quadrants (5\xD75 each)\n    # Quadrant\
+    \ 1: rows 0-4, cols 0-4 (top-left, includes IO)\n    # Quadrant 2: rows 0-4, cols\
+    \ 5-9 (top-right, includes IO)\n    # Quadrant 3: rows 5-9, cols 0-4 (bottom-left,\
+    \ includes IO)\n    # Quadrant 4: rows 5-9, cols 5-9 (bottom-right, includes IO)\n\
+    \    \n    # 2. For first layer, start in quadrant with most available capacity\n\
+    \    # 3. Try to map entire layer within one quadrant first\n    # 4. Only spill\
+    \ to adjacent quadrant if necessary\n    # 5. For next layer, stay in same quadrant\
+    \ if possible\n```\n\n#### **Modification 3: Layer Consolidation Heuristic**\n\
+    ```python\ndef _try_consolidate_layer(self, layer_info, chiplet_indices, available_capacity):\n\
+    \    \"\"\"\n    Try to place entire layer on minimal number of adjacent chiplets.\n\
+    \    Returns: list of (chiplet_id, percentage) if successful, None otherwise\n\
+    \    \"\"\"\n    # Sort chiplets by capacity and group by adjacency\n    # Prefer\
+    \ placing on 2\xD72, 3\xD73, or 4\xD74 blocks of adjacent chiplets\n    # This\
+    \ minimizes communication for weight-stationary configuration\n```\n\n### **Modification\
+    \ 4: VGG16-Specific Optimization**\n```python\ndef _vgg16_aware_placement(self,\
+    \ layer_idx, layer_info, mesh_position):\n    \"\"\"\n    VGG16 has specific pattern:\n\
+    \    - Early conv layers: large feature maps, high communication\n    - Later\
+    \ conv layers: small feature maps, compute intensive\n    - FC layers: very compute\
+    \ intensive, minimal communication\n    \n    Placement strategy:\n    - Layers\
+    \ 1-4: Place centrally (minimize broadcast distance)\n    - Layers 5-8: Place\
+    \ in quadrants (parallel processing)\n    - Layers 9-13: Place peripherally (compute\
+    \ intensive)\n    - FC layers: Distribute evenly across all chiplets\n    \"\"\
+    \"\n```\n\n## 3. Critical Data Your Mapper Ignores\n\n### **A. Mesh Position Metadata**\n\
+    ```python\n# Add to chiplet network nodes:\nchiplet_network.nodes[chiplet_id]['grid_x']\
+    \ = chiplet_id % 10\nchiplet_network.nodes[chiplet_id]['grid_y'] = chiplet_id\
+    \ // 10\nchiplet_network.nodes[chiplet_id]['is_corner'] = (x in [0,9] and y in\
+    \ [0,9])\nchiplet_network.nodes[chiplet_id]['is_edge'] = (x == 0 or x == 9 or\
+    \ y == 0 or y == 9)\n```\n\n### **B. Layer Communication Profile**\n```python\n\
+    # From workload_vgg16.csv, extract:\n# - Input activation size (h\xD7w\xD7c)\n\
+    # - Output activation size  \n# - Weight size\n# - MAC count\n# This determines\
+    \ communication-to-computation ratio for placement\n```\n\n### **C. Inter-Layer\
+    \ Data Dependencies**\n```python\n# Track which chiplets hold previous layer's\
+    \ outputs\n# Prefer placing current layer on same or adjacent chiplets\nprev_layer_chiplets\
+    \ = get_previous_layer_chiplets(layer_mappings)\n```\n\n## 4. Immediate Action\
+    \ Plan\n\n### **Step 1: Fix Critical Bugs** (Highest Impact)\n1. Remove duplicate\
+    \ chiplet filtering\n2. Fix CMOS weight calculation\n3. Add mesh position metadata\n\
+    \n### **Step 2: Implement Quadrant-Based Mapping**\n1. Modify mapper to use 4-quadrant\
+    \ approach\n2. Add layer consolidation heuristic\n3. Test with VGG16 workload\n\
+    \n### **Step 3: Add VGG16-Specific Optimizations**\n1. Implement layer-type aware\
+    \ placement\n2. Add dataflow direction (early\u2192center, late\u2192edges)\n\
+    3. Optimize for weight-stationary configuration\n\n### **Expected Improvement**:\n\
+    - **30-50% reduction in communication latency** by minimizing cross-quadrant traffic\n\
+    - **Better resource utilization** by consolidating layers on adjacent chiplets\n\
+    - **Reduced fragmentation** through quadrant-based allocation\n\nThis approach\
+    \ directly addresses the radial fragmentation problem while leveraging your specific\
+    \ hardware configuration (mesh topology, CMOS chiplets, corner IO)."
+  function_name: dataflow_aware_block_mapper
+  improvement_pct:
+    comm_latency: 0.004000174026123108
+    compute_latency: 0.019866526374640765
+    total_latency: 0.004628300236991097
+  iteration: 2
+  metrics:
+    comm_latency: 296725.22
+    compute_latency: 12229.2
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_checkerboard_dataflow_aware_block_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 296725.22
+        compute_latency: 12229.2
+        total_latency: 308954.42
+    results_label: vgg16_hetero_checkerboard_dataflow_aware_block_mapper
+    total_latency: 308954.42
+  outcome: IMPROVED
+- error: Simulation timed out after 900 seconds.
+  function_name: reverse_waterfall_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+max_iterations: 3
+total_iterations: 2

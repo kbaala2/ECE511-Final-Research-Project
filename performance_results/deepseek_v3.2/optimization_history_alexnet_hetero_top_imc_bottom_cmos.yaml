@@ -1,0 +1,320 @@
+baseline_metrics:
+  comm_latency: 106878.12
+  compute_latency: 14.98
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_top_imc_bottom_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 106893.11
+best_metrics:
+  comm_latency: 76060.08
+  compute_latency: 262.66
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_top_imc_bottom_cmos_optimized_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_top_imc_bottom_cmos_optimized_nearest_neighbor_mapper
+  total_latency: 76322.74
+config: alexnet_hetero_top_imc_bottom_cmos
+history:
+- function_name: load_balanced_nearest_neighbor_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "## Analysis of Nearest-Nighbor Mapping Algorithm Weaknesses\n\n\
+    ### 1. Key Weaknesses of Current Nearest-Nighbor Approach\n\n**A. Static Distance-Based\
+    \ Prioritization**\nThe algorithm prioritizes physical proximity (`distances.get(chiplet_id,\
+    \ math.inf)`) without considering:\n- **Network congestion**: Allocates to nearest\
+    \ chiplets first, potentially creating hotspots\n- **Heterogeneity blindness**:\
+    \ Treats all 96 CMOS_Compute chiplets identically despite potential performance\
+    \ variations\n- **Load balancing**: No mechanism to spread layers evenly across\
+    \ the 10x10 mesh\n\n**B. Single-Start-Point Bottleneck**\n```python\nstarting_chiplet\
+    \ = sorted_chiplets_ids[0]  # Always starts from the \"best\" chiplet\n```\n-\
+    \ Creates a single expansion point radiating outward\n- Limits parallel layer\
+    \ execution opportunities\n- Suboptimal for large models like AlexNet with many\
+    \ layers\n\n**C. Memory Fragmentation**\n```python\nunits_needed_for_resources\
+    \ = math.ceil(resources_remaining * units_needed_full / crossbars_required)\n\
+    ```\n- Allocates partial percentages that may not align with chiplet capacity\
+    \ boundaries\n- Creates leftover capacity fragments too small for subsequent layers\n\
+    - Particularly problematic with 2.46M weight units per CMOS chiplet\n\n**D. Ignored\
+    \ System-Level Metrics**\n- No consideration of:\n  - Inter-chiplet communication\
+    \ bandwidth\n  - Activation data movement patterns\n  - Layer dependency graph\
+    \ (AlexNet has sequential dependencies)\n  - Weight stationary implications (`weight_stationary:\
+    \ true` in config)\n\n**E. Algorithmic Inefficiencies**\n- O(n\xB2) shortest path\
+    \ precomputation (scales poorly beyond 10x10)\n- No lookahead for future layer\
+    \ requirements\n- Greedy allocation without backtracking\n- Fragmented chiplet\
+    \ selection logic with duplicate filtering\n\n### 2. Specific Opportunities for\
+    \ Improvement Given This Config\n\n**A. Mesh Topology Exploitation**\n```yaml\n\
+    adj_matrix: adj_matrix_10x10_mesh.csv\nchiplet_mapping: mapping_100_hetero_top_imc_bottom_cmos.yaml\n\
+    ```\n- **Opportunity**: Create \"zones\" within 10x10 mesh for different layer\
+    \ types\n- **Benefit**: Reduce average hop distance for common activation flows\n\
+    \n**B. CMOS Chiplet Homogeneity**\n```python\n# 96 identical CMOS_Compute chiplets\n\
+    ```\n- **Opportunity**: Round-robin or striping allocation patterns\n- **Benefit**:\
+    \ Better load balancing and heat distribution\n\n**C. IO Chiplet Placement**\n\
+    ```python\n# 4 IO chiplets at corners on a 10x10 mesh topology\n```\n- **Opportunity**:\
+    \ Map input/output-intensive layers to perimeter chiplets\n- **Benefit**: Reduce\
+    \ data movement from/to external interfaces\n\n**D. Weight Stationary Mode**\n\
+    ```yaml\nweight_stationary: true\n```\n- **Opportunity**: Prioritize keeping weights\
+    \ local to avoid re-loading\n- **Benefit**: Reduced weight movement overhead during\
+    \ inference\n\n### 3. Critical Data/Signals Currently Ignored\n\n**A. Layer Dependency\
+    \ Graph**\nAlexNet layers execute sequentially, but the mapper treats each layer\
+    \ independently:\n- No consideration of output\u2192input activation flows\n-\
+    \ Missing opportunity to co-locate dependent layers\n\n**B. Activation Data Volume**\n\
+    From workload_alexnet.csv:\n- Input/output activation sizes vary dramatically\
+    \ between layers\n- Current mapper ignores activation movement cost entirely\n\
+    \n**C. Chiplet Communication Patterns**\n- No awareness of which chiplets communicate\
+    \ frequently\n- Missing ability to create \"communities\" of frequently communicating\
+    \ chiplets\n\n**D. Performance/Energy Tradeoffs**\n```python\nactive_metric =\
+    \ next((metric for metric, active in preference.items() if active), \"performance\"\
+    )\n```\n- Binary preference system (performance OR energy_efficiency)\n- No way\
+    \ to optimize for balanced metrics\n\n**E. Temporal Locality**\n- No reuse of\
+    \ previously allocated weights\n- Each layer allocation starts fresh, ignoring\
+    \ that weights might already be loaded\n\n---\n\n## Recommended Improvements\n\
+    \n### Immediate Fixes:\n1. **Add Load Balancing**: Sort chiplets by available\
+    \ capacity first, then distance\n2. **Fix Duplicate Filtering**: Remove redundant\
+    \ `available_chiplet_ids` filtering code\n3. **Add Fragmentation Metric**: Prefer\
+    \ allocations that leave evenly divisible remainders\n\n### Medium-Term Enhancements:\n\
+    1. **Layer-Aware Placement**: Use AlexNet's layer dependency graph to guide placement\n\
+    2. **Activation-Aware Mapping**: Consider input/output activation sizes in distance\
+    \ calculations\n3. **Zone-Based Allocation**: Divide 10x10 mesh into quadrants\
+    \ around IO chiplets\n\n### Long-Term Architecture:\n1. **Lookahead Mapper**:\
+    \ Evaluate multiple future layers when placing current layer\n2. **Communication\
+    \ Cost Model**: Integrate Garnet simulator feedback into placement decisions\n\
+    3. **Heterogeneity Awareness**: Add chiplet performance profiles even within same\
+    \ type\n\nThe current mapper's simplicity makes it fast but suboptimal for this\
+    \ 100-chiplet configuration. Adding just load balancing and fragmentation awareness\
+    \ would significantly improve performance without major algorithmic complexity\
+    \ increases."
+  function_name: load_balanced_nearest_neighbor_mapper
+  improvement_pct:
+    comm_latency: -5.342880282699593
+    compute_latency: 0.0
+    total_latency: -5.342131031644598
+  iteration: 1
+  metrics:
+    comm_latency: 112588.49
+    compute_latency: 14.98
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_top_imc_bottom_cmos_load_balanced_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 112588.49
+        compute_latency: 14.98
+        total_latency: 112603.48
+    results_label: alexnet_hetero_top_imc_bottom_cmos_load_balanced_nearest_neighbor_mapper
+    total_latency: 112603.48
+  outcome: NO_IMPROVEMENT
+- function_name: optimized_nearest_neighbor_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on your CHIPSIM configuration and the provided mapping algorithm\
+    \ analysis, I'll identify specific weaknesses and suggest improvements for your\
+    \ 100-chiplet system running AlexNet.\n\n## 1. Key Weaknesses of Current Nearest-Neighbor\
+    \ Approach\n\n**A. Sequential Expansion Bottleneck**\n```python\n# Always starts\
+    \ from single \"best\" chiplet and expands outward\nstarting_chiplet = sorted_chiplets_ids[0]\n\
+    ```\n- Creates radial fragmentation pattern starting from one corner\n- Forces\
+    \ all layers through the same central paths, creating congestion\n- Particularly\
+    \ bad for 10x10 mesh with 96 compute chiplets\n\n**B. Ignoring Network Topology\
+    \ Structure**\n- No awareness that 4 IO chiplets are at corners (mesh topology)\n\
+    - Misses opportunity for perimeter-based mapping to minimize hop distance to IO\n\
+    - Doesn't exploit mesh symmetry for load distribution\n\n**C. Layer-Independent\
+    \ Placement**\n- Each layer placement ignores dependencies in AlexNet's sequential\
+    \ execution\n- No consideration that activation outputs flow directly to next\
+    \ layer inputs\n- Wasted opportunity to minimize inter-layer communication\n\n\
+    **D. Blind Fragmentation**\n```python\nalloc_percentage = (available_units * 100\
+    \ / units_needed_full)\n```\n- Creates arbitrary percentage splits (e.g., 37.2%,\
+    \ 42.8%) \n- Leaves fragmented capacity that can't accommodate subsequent layers\n\
+    - With 2.46M weight units per CMOS chiplet, fragmentation creates many unusable\
+    \ small chunks\n\n**E. No Consideration of Activation Data Movement**\n- AlexNet\
+    \ has massive activation volumes between layers\n- Current mapper optimizes only\
+    \ for weight placement (weight_stationary: true)\n- Ignores that activation movement\
+    \ may dominate energy/latency\n\n## 2. Specific Opportunities for This Configuration\n\
+    \n**A. Exploit Mesh Topology Structure**\n- **10x10 mesh with 4 corner IO chiplets**:\
+    \ Create 4 quadrants, each with one IO chiplet\n- **Opportunity**: Map layers\
+    \ to chiplets closest to their quadrant's IO chiplet\n- **Benefit**: Reduces average\
+    \ distance to external interfaces\n\n**B. Leverage AlexNet's Layer Characteristics**\n\
+    - From workload_alexnet.csv: AlexNet has alternating conv/fc patterns\n- Early\
+    \ conv layers have different weight/activation ratios than later fc layers\n-\
+    \ **Opportunity**: Map early conv layers differently than later fc layers\n- **Benefit**:\
+    \ Better alignment with data movement patterns\n\n**C. Weight Stationary Optimization**\n\
+    ```yaml\nweight_stationary: true\nweight_loading_strategy: all_at_once\n```\n\
+    - Weights loaded once at start, then remain stationary\n- **Opportunity**: Map\
+    \ layers to minimize activation movement between layers\n- **Benefit**: Reduced\
+    \ communication during inference\n\n**D. Homogeneous CMOS Array**\n- 96 identical\
+    \ CMOS_Compute chiplets\n- **Opportunity**: Use deterministic patterns (striping,\
+    \ checkerboard)\n- **Benefit**: Predictable performance and easier debugging\n\
+    \n## 3. Critical Missing Data/Signals\n\n**A. Layer-to-Layer Data Dependencies**\n\
+    - AlexNet's sequential execution: conv1 \u2192 relu1 \u2192 pool1 \u2192 conv2\
+    \ \u2192 ...\n- Current mapper treats each layer independently\n- **Missing signal**:\
+    \ Which chiplets hold outputs from previous layer\n\n**B. Activation Volume Estimates**\n\
+    - From model_definitions.py: Each layer's input/output activation sizes\n- **Missing\
+    \ signal**: How much data needs moving between layers\n- **Critical for**: Minimizing\
+    \ communication costs\n\n**C. Chiplet Communication Patterns**\n- No tracking\
+    \ of which chiplet pairs communicate frequently\n- **Missing signal**: \"Hot\"\
+    \ communication paths that should be optimized\n- **Important for**: Reducing\
+    \ network congestion in 10x10 mesh\n\n**D. Temporal Locality of Weights**\n- Some\
+    \ layers may reuse weights (not in AlexNet but important generally)\n- **Missing\
+    \ signal**: Weight reuse patterns across layers\n- **Relevant for**: Future multi-model\
+    \ or multi-batch scenarios\n\n---\n\n## Recommended Optimizations (Ordered by\
+    \ Impact)\n\n### High-Impact, Low-Complexity Fixes:\n\n1. **Quadrant-Based Placement**\n\
+    ```python\ndef _assign_to_quadrant(self, chiplet_id, layer_index):\n    # Divide\
+    \ 10x10 mesh into 4 quadrants around IO chiplets\n    # Layer i goes to quadrant\
+    \ (i % 4)\n    quadrant_size = 25  # ~25 chiplets per quadrant (96/4)\n    quadrant\
+    \ = layer_index % 4\n    return chiplet_id in range(quadrant*quadrant_size, (quadrant+1)*quadrant_size)\n\
+    ```\n- **Benefit**: Spreads traffic evenly across mesh, reduces congestion\n-\
+    \ **Complexity**: Low (modify sorting logic)\n\n2. **Layer-Type Aware Placement**\n\
+    ```python\nif layer_info['layer_type'] == 'conv':\n    # Map early conv layers\
+    \ near edges (closer to IO)\n    sort_key = (distance_to_nearest_io, -available_memory)\n\
+    elif layer_info['layer_type'] == 'fc':\n    # Map fc layers prioritizing memory\
+    \ capacity\n    sort_key = (-available_memory, distance_to_previous_layer)\n```\n\
+    - **Benefit**: Better matches AlexNet's access patterns\n- **Complexity**: Medium\
+    \ (need layer type detection)\n\n3. **Defragmentation-Aware Allocation**\n```python\n\
+    # Instead of arbitrary percentages, use capacity-aligned splits\ndef allocate_aligned_units(available_units,\
+    \ units_needed_full, resources_remaining):\n    # Find allocation that leaves\
+    \ \"chunkable\" remainder\n    possible_splits = find_integer_splits(resources_remaining)\n\
+    \    for split in possible_splits:\n        required_units = ceil(split * units_needed_full\
+    \ / resources_remaining)\n        if required_units <= available_units:\n    \
+    \        return split, required_units\n```\n- **Benefit**: Reduces fragmentation,\
+    \ increases utilization\n- **Complexity**: Medium (need integer allocation algorithm)\n\
+    \n### Medium-Impact, Higher-Complexity Improvements:\n\n4. **Inter-Layer Communication\
+    \ Optimization**\n```python\n# Track where previous layer's outputs are placed\n\
+    previous_layer_chiplets = get_output_locations(layer_mappings[-1])\n# Optimize\
+    \ current layer placement to minimize activation movement\nsort_key = (distance_to_previous_outputs,\
+    \ -available_memory)\n```\n- **Benefit**: Reduces activation movement energy/latency\n\
+    - **Complexity**: High (need to track data dependencies)\n\n5. **Lookahead Window\
+    \ Optimization**\n```python\n# Consider next N layers when placing current layer\n\
+    lookahead_layers = model_metrics[layer_idx:layer_idx+LOOKAHEAD_WINDOW]\n# Find\
+    \ placement that minimizes total cost across window\nbest_placement = minimize_total_cost(current_layer,\
+    \ lookahead_layers)\n```\n- **Benefit**: Better global optimization across layer\
+    \ sequence\n- **Complexity**: High (exponential search space)\n\n### Implementation\
+    \ Priority:\n1. **Start with Quadrant-Based Placement** - Simple, high impact\
+    \ for 10x10 mesh\n2. **Add Defragmentation Logic** - Critical for 2.46M weight\
+    \ unit chunks\n3. **Layer-Type Awareness** - Leverages AlexNet's known structure\n\
+    4. **Inter-Layer Optimization** - Addresses sequential dependency issue\n\nThe\
+    \ current mapper's fundamental issue is treating each layer as independent when\
+    \ AlexNet execution is highly sequential. Even simple quadrant-based placement\
+    \ would dramatically improve network utilization by spreading traffic across all\
+    \ 4 mesh quadrants instead of radiating from a single point."
+  function_name: optimized_nearest_neighbor_mapper
+  improvement_pct:
+    comm_latency: 28.834751210069932
+    compute_latency: -1653.404539385848
+    total_latency: 28.599008860346558
+  iteration: 2
+  metrics:
+    comm_latency: 76060.08
+    compute_latency: 262.66
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_top_imc_bottom_cmos_optimized_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 76060.08
+        compute_latency: 262.66
+        total_latency: 76322.74
+    results_label: alexnet_hetero_top_imc_bottom_cmos_optimized_nearest_neighbor_mapper
+    total_latency: 76322.74
+  outcome: IMPROVED
+- function_name: wavefront_mapper_v4
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on the previous optimization attempts, I see the first one\
+    \ reduced latency significantly (112603.48 \u2192 76322.74), but subsequent improvements\
+    \ may be diminishing. Let me analyze a **DIFFERENT optimization strategy** focusing\
+    \ on the unique aspects of your configuration that haven't been fully exploited.\n\
+    \n## New Optimization Strategy: **Wavefront Parallel Mapping**\n\n### Core Insight\n\
+    Your configuration has **96 homogeneous CMOS chiplets** in a **10x10 mesh** with\
+    \ **weight stationary execution**. The current nearest-neighbor creates sequential\
+    \ bottlenecks. Instead, we should enable **parallel layer execution** where possible\
+    \ by exploiting AlexNet's data flow.\n\n### Key Observations from AlexNet Structure:\n\
+    1. **Layer Parallelism Opportunities**: \n   - Pooling layers can execute in parallel\
+    \ with next conv layer preparation\n   - Multiple output channels within a layer\
+    \ can be processed independently\n   \n2. **10x10 Mesh Advantage**:\n   - Mesh\
+    \ topology enables multiple independent data paths\n   - We have 4 IO chiplets\
+    \ at corners - create 4 independent data injection points\n\n3. **Weight Stationary\
+    \ Benefit**:\n   - Once weights are loaded, they stay put\n   - We can strategically\
+    \ place weights to serve multiple computations\n\n### Proposed Wavefront Algorithm:\n\
+    \n```python\ndef _wavefront_mapper_v4(self, model_layer_info, system, preference,\
+    \ \n                         current_available_crossbars, layer_mappings=None,\
+    \ \n                         shortest_paths=None):\n    \"\"\"\n    Wavefront\
+    \ mapping: Distribute layers in waves across the mesh\n    to maximize parallel\
+    \ execution opportunities.\n    \"\"\"\n    # Divide mesh into 4 quadrants (25\
+    \ chiplets each, minus corners)\n    QUADRANT_SIZE = 24  # 25 minus 1 IO chiplet\n\
+    \    \n    # Determine wavefront based on layer type and position\n    layer_idx\
+    \ = len(layer_mappings) if layer_mappings else 0\n    layer_type = model_layer_info['layer_type']\n\
+    \    \n    # Strategy 1: For early conv layers (input-heavy) - map to perimeter\n\
+    \    if layer_idx < 3:  # First few conv layers\n        target_quadrant = layer_idx\
+    \ % 4\n        # Select chiplets on edges of specified quadrant\n        edge_chiplets\
+    \ = self._get_quadrant_edge_chiplets(target_quadrant)\n        priority_list =\
+    \ edge_chiplets\n    \n    # Strategy 2: For middle layers - use checkerboard\
+    \ pattern\n    elif 3 <= layer_idx < 8:\n        # Create checkerboard across\
+    \ all quadrants for load balancing\n        priority_list = self._get_checkerboard_chiplets(layer_idx)\n\
+    \    \n    # Strategy 3: For final FC layers - consolidate to minimize communication\n\
+    \    else:\n        # Consolidate to fewer chiplets to reduce activation aggregation\n\
+    \        priority_list = self._get_consolidated_chiplets(layer_idx)\n    \n  \
+    \  # Modified allocation: Prefer whole-chiplet allocation\n    return self._allocate_with_consolidation(\n\
+    \        priority_list, model_layer_info, current_available_crossbars\n    )\n\
+    ```\n\n### Three Concrete Improvements:\n\n#### 1. **Quadrant-Based Wave Initiation**\n\
+    ```python\ndef _initiate_waves(self):\n    # Start 4 independent computation waves\
+    \ from each corner IO\n    # Each wave processes 1/4 of the model layers\n   \
+    \ wave_layers = split_layers_into_4_waves(model_layers)\n    for wave_idx in range(4):\n\
+    \        starting_chiplet = self._get_corner_io_chiplet(wave_idx)\n        # Map\
+    \ wave layers to chiplets in that quadrant\n        map_wave_to_quadrant(wave_idx,\
+    \ wave_layers[wave_idx])\n```\n- **Benefit**: 4x parallelism for independent layers\n\
+    - **Impact**: High for AlexNet's early conv layers\n\n#### 2. **Contiguous Block\
+    \ Allocation**\n```python\ndef _allocate_contiguous_blocks(self, chiplets_needed):\n\
+    \    # Instead of fragmenting across many chiplets,\n    # allocate CONTIGUOUS\
+    \ blocks of chiplets\n    # Find N contiguous chiplets with sufficient total capacity\n\
+    \    contiguous_sets = find_contiguous_sets(chiplets_needed)\n    # Prefer sets\
+    \ that minimize external communication\n    best_set = min(contiguous_sets, key=self._communication_cost)\n\
+    ```\n- **Benefit**: Reduces cross-chiplet communication for intermediate activations\n\
+    - **Impact**: Medium-High for weight stationary mode\n\n#### 3. **Predictive Preloading**\n\
+    ```python\ndef _predictive_preload(self, current_layer, lookahead=2):\n    # When\
+    \ placing current layer, also reserve space for\n    # likely next layers based\
+    \ on AlexNet pattern\n    next_layers = predict_next_layers(current_layer, lookahead)\n\
+    \    # Allocate current layer near where next layers will need weights\n    #\
+    \ This minimizes weight movement in weight_stationary mode\n```\n- **Benefit**:\
+    \ Better weight locality across layer sequence\n- **Impact**: Medium for sequential\
+    \ execution\n\n### Implementation Plan:\n\n**Phase 1 (Quick Win) - Mesh Quadrantization:**\n\
+    ```python\n# Simple addition to nearest_neighbor_mapper_v3:\n# After line that\
+    \ computes distances, add quadrant bias\nquadrant = (layer_idx // 5) % 4  # Change\
+    \ quadrant every 5 layers\nquadrant_center = self._get_quadrant_center(quadrant)\n\
+    adjusted_distances = [d + quadrant_bias(chiplet_id, quadrant_center) \n      \
+    \                for chiplet_id in available_chiplet_ids]\n# Sort by adjusted\
+    \ distance instead of raw distance\n```\n\n**Phase 2 (Medium Term) - Contiguous\
+    \ Allocation:**\n- Modify allocation to prefer filling whole chiplets before splitting\n\
+    - Add fragmentation score to chiplet selection criteria\n\n**Phase 3 (Advanced)\
+    \ - Wavefront Execution:**\n- Analyze AlexNet layer dependencies for true parallel\
+    \ opportunities\n- Implement layer grouping for simultaneous execution\n\n###\
+    \ Why This is Different from Previous Attempts:\n\n1. **Not just spreading load**\
+    \ - Actively creating parallel execution paths\n2. **Exploits mesh topology structurally**\
+    \ - Uses quadrant boundaries as natural parallel regions\n3. **Considers temporal\
+    \ execution pattern** - Not just spatial placement\n4. **Aligns with weight stationary**\
+    \ - Strategic placement to minimize weight movement\n\n### Expected Benefits for\
+    \ Your Configuration:\n- **Latency**: 30-40% reduction via parallel wave execution\n\
+    - **Network Utilization**: More even distribution across 10x10 mesh\n- **Energy\
+    \ Efficiency**: Reduced activation movement through contiguous allocation\n- **Scalability**:\
+    \ Pattern works for any mesh size with corner IO\n\n### First Step Implementation:\n\
+    Modify `_nearest_neighbor_mapper_v3` to incorporate quadrant biasing - this can\
+    \ be done with minimal changes while preserving the existing algorithm's structure\
+    \ but dramatically improving its mesh utilization.\n\nWould you like me to provide\
+    \ the specific code modifications for Phase 1 (Quadrant Biasing) that you could\
+    \ implement immediately?"
+  function_name: wavefront_mapper_v4
+  improvement_pct:
+    comm_latency: 19.406544576195756
+    compute_latency: -4276.90253671562
+    total_latency: 18.804467378673902
+  iteration: 3
+  metrics:
+    comm_latency: 86136.77
+    compute_latency: 655.66
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_top_imc_bottom_cmos_wavefront_mapper_v4/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 86136.77
+        compute_latency: 655.66
+        total_latency: 86792.43
+    results_label: alexnet_hetero_top_imc_bottom_cmos_wavefront_mapper_v4
+    total_latency: 86792.43
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

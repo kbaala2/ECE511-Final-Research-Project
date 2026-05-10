@@ -1,0 +1,459 @@
+baseline_metrics:
+  comm_latency: 106878.12
+  compute_latency: 19.83
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_cmos_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 106897.95
+best_metrics:
+  comm_latency: 74072.7
+  compute_latency: 662.94
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_cmos_heavy_improved_mapper_v2/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_cmos_heavy_improved_mapper_v2
+  total_latency: 74735.64
+config: alexnet_hetero_cmos_heavy
+history:
+- function_name: improved_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "## 1. Key weaknesses of the current nearest-neighbor approach (v3)\n\
+    \nThe mapper suffers from several fundamental limitations that degrade mapping\
+    \ quality in this heterogeneous mesh configuration:\n\n1. **Greedy, layer-by-layer\
+    \ placement with no global awareness**  \n   * Each layer is placed independently,\
+    \ optimizing only its own locality with respect to the previous layer\u2019s dominant\
+    \ chiplet. There is no lookahead; the algorithm cannot foresee that early placement\
+    \ choices will force later layers into sub\u2011optimal distant regions.  \n \
+    \  * This leads to severe fragmentation and sub\u2011optimal network usage, especially\
+    \ for deep networks like AlexNet.\n\n2. **Myopic \u201Cstarting chiplet\u201D\
+    \ heuristic**  \n   * The next layer is anchored to the chiplet that hosted the\
+    \ *largest percentage* of the previous layer. This ignores the distributed nature\
+    \ of partitioned layers\u2014activations from many chiplets must flow to the next\
+    \ layer\u2019s inputs. The dominant chiplet may not be the centroid of the previous\
+    \ layer\u2019s communication footprint.  \n   * As a result, a large fraction\
+    \ of intermediate activations may travel longer distances than necessary.\n\n\
+    3. **Distance-only cost function with arbitrary tie\u2011breaking**  \n   * Chiplets\
+    \ are sorted by (distance, available_memory, metric). This over\u2011emphasizes\
+    \ hop count, often forcing layers onto chips with very little free memory just\
+    \ because they are slightly nearer, causing unnecessary splitting across many\
+    \ chips and increasing global communication.  \n   * When the network is heavily\
+    \ loaded, this can create \u201Chot\u201D links and chiplets that degrade overall\
+    \ throughput.\n\n4. **No consideration of communication volume**  \n   * The mapper\
+    \ does not know the size of the activation tensors that must be transmitted between\
+    \ layers. A small number of hops for a huge volume is far more damaging than many\
+    \ hops for a tiny volume, yet the algorithm treats all distances equally.  \n\
+    \   * This is particularly harmful for layers near the input and output (e.g.,\
+    \ AlexNet\u2019s first conv layer and final fc layers) where data volumes are\
+    \ large.\n\n5. **Ignores I/O chiplet locations and data injection/collection**\
+    \  \n   * The 4 I/O chiplets at mesh corners are completely excluded from the\
+    \ mapping logic. The first layer\u2019s input image and the last layer\u2019s\
+    \ classification results must travel to/from these corners, but the mapper never\
+    \ tries to place those layers nearby.  \n   * Consequently, the entire network\u2019\
+    s critical ingress/egress traffic may traverse the entire mesh, adding substantial\
+    \ latency and congestion.\n\n6. **Partitioning limited to output channels**  \n\
+    \   * Conv layers are split along output channels, which produces partial sums\
+    \ that must be gathered before the next layer\u2019s computation. The mapper has\
+    \ no awareness of this \u201Call\u2011reduce\u201D traffic and does not attempt\
+    \ to co\u2011locate partitions that share partial sums.  \n   * The na\xEFve partitioning\
+    \ also ignores spatial parallelism (e.g., along feature map dimensions) that could\
+    \ reduce communication.\n\n## 2. Specific opportunities for improvement given\
+    \ this config\n\nWith 96 homogeneous CMOS\u2011Compute chiplets (2.46\u202FM weights\
+    \ each) and 4 corner I/O chiplets on a 10\xD710 mesh, several enhancements can\
+    \ drastically improve mapping quality:\n\n- **Global placement with communication\u2011\
+    cost objective**  \n  Replace the sequential greedy mapper with a global optimizer\
+    \ (e.g., simulated annealing or ILP) that jointly places all layers. The cost\
+    \ function should be a weighted sum of hop distance \xD7 inter\u2011layer data\
+    \ volume, plus penalties for chiplet capacity violations. Even a simple offline\
+    \ \u201Csearch\u201D that can backtrack would yield much better locality.\n\n\
+    - **Layer\u2011grouping for pipeline efficiency**  \n  Identify natural pipeline\
+    \ stages (e.g., conv blocks) and place them as contiguous clusters in the mesh.\
+    \ This reduces inter\u2011stage distance and can exploit the non\u2011pipelined\
+    \ Garnet communication more efficiently.\n\n- **Proximity to I/O chiplets**  \n\
+    \  Force the first and last layers to be placed close to an I/O chiplet, or at\
+    \ least bias their placement toward the nearest corner. The distance penalty should\
+    \ be weighted by the large activation sizes at the network boundaries.\n\n- **Communication\u2011\
+    aware partitioning**  \n  Instead of always splitting conv layers along output\
+    \ channels, consider splitting along input channels or spatially (e.g., along\
+    \ height/width) when it reduces the need for partial\u2011sum aggregation. Coupling\
+    \ the partitioner with the mapper allows the system to decide *how* to partition\
+    \ based on communication cost.\n\n- **Dynamic sorting with a composite cost**\
+    \  \n  Within the existing nearest\u2011neighbor framework, replace (distance,\
+    \ memory, metric) with a cost function like `\u03B1\xB7distance + \u03B2\xB7(1\
+    \ \u2013 normalized_available_memory)`, where \u03B1/\u03B2 are tuned per layer\
+    \ based on its size and fan\u2011out. This helps avoid filling up tiny memory\
+    \ holes just to save one hop.\n\n- **Use of mesh symmetry and bisection bandwidth**\
+    \  \n  The 10\xD710 mesh has a large bisection; the mapper should deliberately\
+    \ spread large layers across multiple rows/columns to utilize parallel links,\
+    \ rather than clustering everything in one corner.\n\n- **Hotspot avoidance**\
+    \  \n  Track the cumulative communication load on each link and each chiplet as\
+    \ mapping proceeds, and use this \u201Ccongestion map\u201D to discourage further\
+    \ placements that would overload already\u2011busy paths.\n\n## 3. What data/signals\
+    \ the mapper currently ignores that it should use\n\nThe v3 mapper completely\
+    \ neglects the following critical information, all of which are available (or\
+    \ easily computable) in the simulation framework:\n\n- **Inter\u2011layer data\
+    \ volumes** (activation tensor sizes)  \n  *Source:* Model definitions and workload\
+    \ files already contain input/output activation shapes, from which byte volumes\
+    \ can be derived.  \n  *Impact:* Using volume\u2011weighted distance would dramatically\
+    \ reduce network congestion.\n\n- **I/O chiplet locations and ingress/egress traffic**\
+    \  \n  *Source:* The system object knows which chiplets are I/O and their positions.\
+    \  \n  *Impact:* Placing input\u2011consuming layers near an I/O chiplet cuts\
+    \ the latency of the first inference step.\n\n- **Weight\u2011loading source and\
+    \ initial distribution**  \n  *Source:* The configuration uses weight\u2011stationary\
+    \ with all\u2011at\u2011once loading. A mapping that places a layer far from the\
+    \ weight storage point incurs a one\u2011time burst of traffic.  \n  *Impact:*\
+    \ For a typical inference run, this may be amortized, but for short jobs or memory\u2011\
+    constrained chips, it can degrade performance.\n\n- **Chiplet utilization and\
+    \ residual capacity after prior placements**  \n  *Source:* `current_available_crossbars`\
+    \ already tracks memory, but the mapper uses it only as a secondary tie\u2011\
+    breaker.  \n  *Impact:* A more sophisticated cost could favor chips with larger\
+    \ contiguous free blocks to avoid unnecessary splitting.\n\n- **Network congestion\
+    \ estimates (link loads)**  \n  *Source:* Simulators like Garnet can provide link\u2011\
+    level statistics, but even a simple analytical model (like counting packets that\
+    \ will traverse each link) can be incorporated.  \n  *Impact:* Avoiding congested\
+    \ routes improves latency and throughput, especially with non\u2011pipelined communication\
+    \ and blocking age thresholds.\n\n- **Layer compute latency vs. communication\
+    \ latency**  \n  *Source:* CMOS chiplet compute rates (if known) and network bandwidth.\
+    \  \n  *Impact:* For layers that are compute\u2011bound, a slightly longer communication\
+    \ hop may be acceptable if it yields a more balanced memory layout; the mapper\
+    \ never makes this trade\u2011off.\n\n- **Pipeline parallelism potential**  \n\
+    \  *Source:* The layer dependency graph.  \n  *Impact:* The mapper could schedule\
+    \ layers so that overlapping computation and communication is possible, but it\
+    \ completely ignores this dimension.\n\nBy incorporating even a few of these ignored\
+    \ signals, the mapper could produce placements that reduce latency by 20\u2013\
+    50% and network congestion by a similar margin, as demonstrated in prior DNN\u2011\
+    on\u2011chiplet research."
+  function_name: improved_mapper
+  improvement_pct:
+    comm_latency: -0.03944680164658912
+    compute_latency: -12.25416036308625
+    total_latency: -0.04171268017768021
+  iteration: 1
+  metrics:
+    comm_latency: 106920.28
+    compute_latency: 22.26
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_cmos_heavy_improved_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 106920.28
+        compute_latency: 22.26
+        total_latency: 106942.54
+    results_label: alexnet_hetero_cmos_heavy_improved_mapper
+    total_latency: 106942.54
+  outcome: NO_IMPROVEMENT
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/map"
+  function_name: improved_mapper_v2
+  iteration: 2
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- function_name: improved_mapper_v2
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 2
+- change_summary: "**Analysis of `_nearest_neighbor_mapper_v3`**  \n\n### 1. Key Weaknesses\
+    \ of the Current Nearest-Neighbor Approach  \n\n1. **Greedy Layer-by-Layer Without\
+    \ Lookahead**  \n   Each layer is placed independently, using only the previous\
+    \ layer\u2019s largest chiplet as the starting point. This leads to *fragmentation*\
+    \ and blocks that drift into remote regions, forcing later layers to incur high\
+    \ communication cost. A suboptimal early decision can chain\u2011react across\
+    \ the entire depth of AlexNet.\n\n2. **Misleading Starting Chiplet Heuristic**\
+    \  \n   The mapper uses the chiplet with the largest *percentage* of the previous\
+    \ layer, ignoring that many chiplets contribute output activations. The true communication\
+    \ footprint is distributed, and the dominant chiplet is not necessarily the centroid.\
+    \ This creates unnecessary multi\u2011hop traffic for a large share of intermediate\
+    \ data.\n\n3. **Simplistic (Distance, Free Memory, Performance) Sorting**  \n\
+    \   The chiplets are sorted by `(distance, -available_memory, -performance_metric)`.\
+    \ Distance is treated as the primary cost, but with no weighting by data volume,\
+    \ this often forces a layer onto a chiplet with minuscule free capacity just to\
+    \ save one hop, causing excessive splitting and increased global traffic.  \n\n\
+    4. **Zero Inter\u2011Layer Communication Volume Awareness**  \n   The mapper does\
+    \ not consider the *size* of the activation tensors. In AlexNet, the first conv\
+    \ layer and the final fc layers involve massive data movements; a few extra hops\
+    \ for a small tensor is negligible, but the same hop count for large volumes is\
+    \ devastating.  \n\n5. **Ignorance of I/O Chiplet Locations**  \n   The 4 corner\
+    \ I/O chiplets are completely excluded from placement logic. The first layer\u2019\
+    s input (raw image) and the last layer\u2019s output (classification) must travel\
+    \ from/to these corners, yet the mapper never biases placement toward them. This\
+    \ can add a long diagonal trip across the 10\xD710 mesh, dominating latency. \
+    \ \n\n6. **No Congestion or Link\u2011Load Metrics**  \n   The algorithm does\
+    \ not track cumulative traffic load on network links. It can repeatedly place\
+    \ layers along the same hot\u2011spot path, causing blocking and throttling that\
+    \ the Garnet simulator will penalize heavily, especially under the non\u2011pipelined\
+    \ model and `blocking_age_threshold` of 10.\n\n---\n\n### 2. Specific Opportunities\
+    \ for Improvement Given This Config  \n\nGiven a 10\xD710 mesh with 96 homogeneous\
+    \ CMOS\u2011Compute chiplets (2.46\u202FM weights each) and 4 corner I/O chiplets:\n\
+    \n- **Global Placement with Volume\u2011Weighted Communication Cost**  \n  Replace\
+    \ the greedy algorithm with an offline global optimizer (e.g., simulated annealing\
+    \ or a fast ILP) that jointly places all layers. The cost function should be a\
+    \ sum of `(hop distance) \xD7 (inter\u2011layer data volume)` plus penalty for\
+    \ exceeding chiplet capacity. Even a simple search with backtracking would greatly\
+    \ improve locality.\n\n- **Proximity to I/O Chiplets**  \n  Force the first layer\
+    \ (input) and the last layer (output) to be placed near an I/O chiplet. This can\
+    \ be done by adding a bias term in the cost function or by seeding the global\
+    \ optimizer with initial clusters around each corner.\n\n- **Communication\u2011\
+    Aware Layer Partitioning**  \n  Instead of always partitioning conv layers along\
+    \ output channels (which requires partial\u2011sum aggregation), consider splitting\
+    \ along input channels or spatial dimensions (height/width) to *reduce* cross\u2011\
+    chiplet communication. Coupling partitioning with placement decisions would allow\
+    \ the algorithm to choose a partitioning scheme that minimizes data movement.\n\
+    \n- **Traffic\u2011Cost\u2011Driven Chiple Selection**  \n  Replace the simple\
+    \ `(distance, -memory, -perf)` sort with a composite cost: `\u03B1\xB7distance\
+    \ + \u03B2\xB7(1 \u2013 normalized_available_memory)`, where \u03B1 and \u03B2\
+    \ are layer\u2011specific and proportional to output activation volume. This avoids\
+    \ wasting large memory gaps just to save one pointless hop.\n\n- **Pipeline\u2011\
+    Stage Clustering**  \n  Identify logical stages (e.g., conv blocks) and place\
+    \ them in contiguous rectangular regions of the mesh. This reduces hop count for\
+    \ intra\u2011stage communication and better exploits the bisection bandwidth.\n\
+    \n- **Congestion\u2011Aware Mapping**  \n  Maintain a running estimate of link\
+    \ burden (packets per link) as mapping proceeds, using the known inter\u2011layer\
+    \ data sizes. The cost function can then discourage placements that would overload\
+    \ already\u2011busy paths, thus preventing hot spots.\n\n- **Exploit Mesh Symmetry\
+    \ for Large Layers**  \n  For very large layers (e.g., the first conv layer of\
+    \ AlexNet), the mapper can deliberately spread the partitions across multiple\
+    \ rows/columns to utilize parallel paths, instead of forcing everything into a\
+    \ tight cluster that saturates a few links.\n\n---\n\n### 3. What Data/Signals\
+    \ the Mapper Currently Ignores That It Should Use  \n\nThe following information\
+    \ is available (or easily derived) from the simulation framework but is completely\
+    \ unused by `_nearest_neighbor_mapper_v3`:\n\n| Ignored Signal | Source | Impact\
+    \ if Used |\n|---------------|--------|----------------|\n| **Inter\u2011layer\
+    \ activation tensor sizes** | Model definitions / workload file | Weighting hop\
+    \ count by byte volume would dramatically reduce network congestion. |\n| **I/O\
+    \ chiplet positions and ingress/egress traffic** | System object knows which chiplets\
+    \ are I/O and their coordinates | Placing input/output layers near corners cuts\
+    \ first/last hop latency. |\n| **Weight\u2011loading burst volume** | Weight\u2011\
+    stationary, all\u2011at\u2011once loading | A far\u2011away placement causes a\
+    \ one\u2011time traffic spike; for short jobs this matters. |\n| **Remaining contiguous\
+    \ memory blocks per chiplet** | `current_available_crossbars` | Preferring chips\
+    \ with larger free blocks avoids unnecessary splitting. |\n| **Network link congestion\
+    \ (cumulative packet count)** | Simulator / simple analytic model | Avoiding already\u2011\
+    busy paths prevents throttling under non\u2011pipelined comm. |\n| **Compute latency\
+    \ vs. communication latency trade\u2011off** | CMOS chiplet compute bandwidth,\
+    \ network bandwidth | For compute\u2011bound layers, a slightly longer path may\
+    \ be acceptable if it balances memory capacity. |\n| **Pipeline parallelism potential**\
+    \ | Layer dependency graph | Layers with no data dependency could be overlapped,\
+    \ but the mapper ignores this. |\n| **Weight\u2011storage locations** | Chip weight\
+    \ loading source (if not uniform) | Could co\u2011locate weights and computation\
+    \ to avoid sustained DRAM\u2192chiplet traffic after initial load. |\n\n---\n\n\
+    **Proposed *Different* Optimization Strategy**  \n\nGiven the previous attempt\
+    \ (iteration\u202F1) yielded no improvement (latency unchanged at ~106\u202F943\u202F\
+    cycles), the na\xEFve local optimizations (e.g., tweaking tie\u2011breaking) were\
+    \ insufficient. A different strategy must address the root cause: the **greedy,\
+    \ volume\u2011blind, and I/O\u2011unaware placement**.  \n\n**Strategy: Two\u2011\
+    Phase Mapping with Global Volume\u2011Weighted Clustering**  \n\n1. **Phase\u202F\
+    1 \u2013 Layer Clustering using Data\u2011Volume Graph**  \n   - Build a weighted\
+    \ directed graph of layers, where edge weight = activation tensor size (in bytes).\
+    \  \n   - Perform spectral clustering or a balanced min\u2011cut to partition\
+    \ layers into *pipeline groups*, each of which will be assigned to a distinct\
+    \ region of the mesh.  \n   - Bias the first and last groups toward the I/O corners\
+    \ by adding virtual attachments.\n\n2. **Phase\u202F2 \u2013 Region\u2011Constrained\
+    \ Global Placement**  \n   - For each group, solve a small **quadratic assignment**\
+    \ or simulated annealing sub\u2011problem to place the layers within its assigned\
+    \ region, minimizing a cost that is `sum_{layers} (hop_dist from layer i to i+1)\
+    \ \xD7 (activation volume)`.  \n   - Enforce chiplet capacity constraints explicitly\
+    \ in the objective.  \n   - After placement, use the existing `LayerPartitioner`\
+    \ but allow an alternative splitting mode (input\u2011channel split for conv layers)\
+    \ when it reduces the number of chiplets that must aggregate partial sums.\n\n\
+    This approach introduces global awareness, incorporates data\u2011volume and I\u2011\
+    O proximity, and avoids the catastrophic chain of errors caused by greedy step\u2011\
+    by\u2011step anchoring. It can be implemented by extending `ModelMapper` with\
+    \ a new `global_cluster_mapper` method that calls the clustering and constrained\
+    \ placement routines before executing any partition.\n\nThe expected outcome is\
+    \ a substantial reduction in total communication distance (and thus latency) because\
+    \ large\u2011volume transfers will stay short and the entire network\u2019s ingress/egress\
+    \ paths will be minimized. Given that the previous local tweak failed, this structural\
+    \ change is the necessary next step."
+  function_name: improved_mapper_v2
+  improvement_pct:
+    comm_latency: 30.6942337683335
+    compute_latency: -3243.1164901664147
+    total_latency: 30.086928701626174
+  iteration: 2
+  metrics:
+    comm_latency: 74072.7
+    compute_latency: 662.94
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_cmos_heavy_improved_mapper_v2/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 74072.7
+        compute_latency: 662.94
+        total_latency: 74735.64
+    results_label: alexnet_hetero_cmos_heavy_improved_mapper_v2
+    total_latency: 74735.64
+  outcome: IMPROVED
+- function_name: volume_aware_nn_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "## 1. Key weaknesses of the current nearest\u2011neighbor approach\
+    \ (v3)\n\n1. **Greedy, no\u2011lookahead mapping**  \n   Each layer is placed\
+    \ independently with no view of future layers. A poor early choice forces the\
+    \ entire network into a sub\u2011optimal region, fragmenting capacity and causing\
+    \ long\u2011distance communication later.\n\n2. **Fragile \u201Cstarting chiplet\u201D\
+    \ heuristic**  \n   The next layer\u2019s placement is anchored to the chiplet\
+    \ that held the largest *fraction* of the previous layer. This ignores the fact\
+    \ that activations originate from many chiplets; the true communication centroid\
+    \ is distributed, and the selected anchor may be far from most of the data sources.\n\
+    \n3. **Hop\u2011count\u2011only cost function**  \n   Sorting candidates by `(distance,\
+    \ available_memory, metric)` makes distance the dominant factor. This often fills\
+    \ a tiny memory hole just to save a single hop, forcing excessively fine\u2011\
+    grained splitting that multiplies the total cross\u2011chiplet traffic and saturates\
+    \ the network.\n\n4. **Zero inter\u2011layer data\u2011volume awareness**  \n\
+    \   The mapper never uses the size of the activation tensors that must be moved\
+    \ between layers. In AlexNet, moving the massive feature maps of the early conv\
+    \ layers costs orders of magnitude more than moving the tiny vectors of later\
+    \ layers, yet all hops are treated identically.\n\n5. **Complete disregard of\
+    \ I/O chiplet locations**  \n   The four corner I/O chiplets are explicitly excluded\
+    \ from mapping logic. The first layer\u2019s raw image input and the last layer\u2019\
+    s classification output must travel from/to these corners, but the mapper does\
+    \ not bias placement toward them, potentially forcing data across the entire 10\xD7\
+    10 mesh.\n\n6. **No congestion or hotspot tracking**  \n   The algorithm never\
+    \ sees the cumulative load on network links. Repeated placement along the same\
+    \ path creates hot links that cause blocking and throttle the non\u2011pipelined\
+    \ Garnet communication, especially with a blocking age threshold of 10.\n\n##\
+    \ 2. Specific opportunities for improvement given this config\n\nWith 96 homogeneous\
+    \ CMOS\u2011Compute chiplets (2.46\u202FM weight units each) and four corner I/O\
+    \ chiplets on a 10\xD710 mesh, the following changes can dramatically lower latency:\n\
+    \n- **Global volume\u2011weighted placement**  \n  Replace the greedy per\u2011\
+    layer loop with an offline optimizer (simulated annealing, ILP, or iterative improvement)\
+    \ that jointly places all layers, using a cost function: `\u2211 over layer transitions\
+    \ (hop distance \xD7 activation tensor bytes)`, plus a penalty for exceeding chiplet\
+    \ capacity.\n\n- **Proximity to I/O chiplets**  \n  Force the first and last layers\
+    \ (or their partitions) to be placed within a small radius (e.g., \u2264\u202F\
+    2\u202Fhops) of an I/O chiplet. This can be done by adding a large bias in the\
+    \ cost function or by initialising the global optimizer with clusters around each\
+    \ corner.\n\n- **Communication\u2011aware partitioning**  \n  Instead of always\
+    \ splitting conv layers by output channels (which necessitates a partial\u2011\
+    sum aggregation step), allow splitting by input channels or spatial dimensions\
+    \ (height/width) when it reduces the number of chiplets that must exchange data.\
+    \ Couple the partitioning decision with placement to choose the least\u2011communication\
+    \ split.\n\n- **Composite chiplet\u2011selection cost**  \n  Within any distance\u2011\
+    based assignment, replace `(distance, memory, perf)` with `\u03B1\xB7distance\
+    \ + \u03B2\xB7(1 \u2013 normalized_available_memory)`, where `\u03B1` and `\u03B2\
+    ` are tuned per layer based on its output data size. This avoids filling small\
+    \ memory holes just to save an irrelevant hop.\n\n- **Pipeline\u2011stage clustering**\
+    \  \n  Identify logical stages (e.g., AlexNet\u2019s conv\u20111\u2192pool\u2192\
+    conv\u20112\u2192\u2026) and place each stage as a contiguous rectangular block\
+    \ on the mesh, minimising inter\u2011stage distance and exploiting the network\
+    \ bisection.\n\n- **Congestion\u2011aware mapping**  \n  Maintain a running estimate\
+    \ of link load (bytes per link) as each layer is assigned, derived from the known\
+    \ inter\u2011layer volumes. The cost function can then discourage placements that\
+    \ would overload already\u2011busy paths.\n\n- **Exploit mesh symmetry for large\
+    \ layers**  \n  For layers with many partitions (e.g., conv\u20111 of AlexNet),\
+    \ spread the partitions across multiple rows and columns to utilise parallel links,\
+    \ rather than clustering them in one spot that saturates a few adjacent links.\n\
+    \n## 3. What data/signals the mapper currently ignores that it should use\n\n\
+    | Ignored Signal | Availability | Impact if Used |\n|----------------|--------------|----------------|\n\
+    | **Inter\u2011layer activation tensor sizes** (in bytes) | Derived from model\
+    \ definitions and workload | Weighting hop count by byte volume would drastically\
+    \ cut network congestion. |\n| **I/O chiplet positions and ingress/egress traffic**\
+    \ | System object marks chiplets as I/O and provides coordinates | Placing input/output\
+    \ layers near corners cuts first/last hop latency. |\n| **Weight\u2011loading\
+    \ burst volume** | Weight\u2011stationary, all\u2011at\u2011once strategy | Initial\
+    \ weight distribution can cause a one\u2011time traffic spike; placement far from\
+    \ weight storage wastes bandwidth. |\n| **Remaining contiguous memory blocks per\
+    \ chiplet** | `current_available_crossbars` already tracks capacity | Preferring\
+    \ chips with larger free blocks avoids unnecessary splitting and fragmented allocations.\
+    \ |\n| **Cumulative link congestion (byte\u2011by\u2011link map)** | Simulator\u2011\
+    \ or analytic\u2011based estimation | Avoiding already\u2011busy paths prevents\
+    \ throttling under non\u2011pipelined comm. |\n| **Compute latency vs. communication\
+    \ latency** | CMOS chiplet compute bandwidth, network bandwidth | For compute\u2011\
+    bound layers, a slightly longer communication path may be acceptable if it balances\
+    \ memory capacity. |\n| **Pipeline parallelism potential** | Layer dependency\
+    \ graph | Layers with no data dependency could be overlapped; the mapper ignores\
+    \ this scheduling dimension. |\n| **Weight\u2011storage locations (if not uniform)**\
+    \ | Chip weight loading source | Co\u2011locating weights and computation avoids\
+    \ sustained DRAM\u2011to\u2011chiplet traffic after the initial load. |\n\n---\n\
+    \n## Proposed Different Optimization Strategy  \n*(Given Iteration\u202F1 failed\
+    \ to improve, and Iteration\u202F2 achieved a moderate reduction in latency, a\
+    \ structurally different, volume\u2011aware global mapping is needed.)*\n\n###\
+    \ **Strategy: Hierarchical Two\u2011Phase Global Mapper with Volume\u2011 and\
+    \ I/O\u2011Awareness**\n\nThis new mapping function, `_global_volume_mapper`,\
+    \ will be added to `ModelMapper` and selected via configuration. It operates in\
+    \ two phases:\n\n---\n\n### Phase\u202F1 \u2013 Layer\u2011Group Clustering Using\
+    \ a Data\u2011Volume Graph\n\n1. **Build a communication graph**  \n   - Nodes\
+    \ are layers. Directed edges from layer *i* to layer *i\u202F+\u202F1* are weighted\
+    \ by the activation tensor size (in bytes) that flows from *i* to *i\u202F+\u202F\
+    1*. This data is obtainable from the model definitions (by calculating the output\
+    \ tensor shape and `bits_per_activation`).\n\n2. **Add virtual attachment nodes\
+    \ for I/O**  \n   - Add one virtual \u201Csource\u201D node connected to the first\
+    \ layer and one \u201Csink\u201D node connected to the last layer. The source\u2011\
+    to\u2011first\u2011layer edge weight equals the input image size; the last\u2011\
+    layer\u2011to\u2011sink edge weight equals the output vector size. These virtual\
+    \ nodes are forced to the mesh corners by assigning them fixed coordinates.\n\n\
+    3. **Spectral clustering into *k* pipeline groups**  \n   - Use the normalized\
+    \ cut of the weighted graph to partition the layer sequence into *k* groups, where\
+    \ *k* \u2248 number of I/O chiplets or a small multiple (e.g., 4\u20138). Each\
+    \ group will be assigned to a distinct region of the mesh, with the first and\
+    \ last groups pinned near an I/O corner.\n\n---\n\n### Phase\u202F2 \u2013 Region\u2011\
+    Constrained Global Placement\n\n1. **Assign each group a rectangular mesh region**\
+    \  \n   - Map group\u20111 to the neighbourhood of an I/O chiplet (if it contains\
+    \ the first layer), group\u2011k to another corner, and intermediate groups to\
+    \ contiguous mid\u2011mesh regions of appropriate size. The region size is proportional\
+    \ to the total weight\u2011units required by the layers in that group.\n\n2. **Inside\
+    \ each region, solve a constrained assignment problem**  \n   - For each group,\
+    \ place its layers (or their partitions) using an iterative improvement algorithm\
+    \ (e.g., pairwise exchange or simulated annealing) that minimises the cost:  \n\
+    \     **Cost = \u03A3 (hop distance from producer chiplet to consumer chiplet)\
+    \ \xD7 (data volume) + capacity violation penalty**  \n   - The distance is computed\
+    \ on the full mesh topology. Chiplet capacity is enforced by the penalty term;\
+    \ the optimizer can split a layer across multiple chiplets if needed, but the\
+    \ splitting is guided by the cost (so it only splits when truly beneficial).\n\
+    \n3. **Incorporate congestion feedback**  \n   - As placement proceeds, maintain\
+    \ a cumulative \u201Clink load\u201D map: each time a path is chosen for a given\
+    \ volume, add that volume to the edges along the shortest path. The cost for subsequent\
+    \ placements can then include a congestion term `\u03B3 \xD7 (link_load / link_bandwidth)`,\
+    \ discouraging overloaded links.\n\n4. **Decide layer partitioning dynamically**\
+    \  \n   - For conv layers, allow three splitting modes: *output\u2011channel split*,\
+    \ *input\u2011channel split*, and *spatial split* (height/width). The optimizer\
+    \ can tentatively try each mode, compute the resulting communication overhead\
+    \ (e.g., partial\u2011sum gather vs. replication), and choose the one that yields\
+    \ the lowest total cost within the current placement state.\n\n5. **Finalise and\
+    \ commit**  \n   - Once the global placement and partitions are determined, translate\
+    \ them into the required `layer_mappings` and `remaining_capacity` format so the\
+    \ existing `LayerPartitioner` can be used to produce the final layer definitions.\
+    \ The system capacity is updated atomically.\n\n---\n\n### Why this strategy is\
+    \ fundamentally different\n\nPrevious attempts stayed within the per\u2011layer\
+    \ greedy framework, tweaking tie\u2011breaking and local heuristics. This new\
+    \ strategy:\n\n- **Introduces global vision** through clustering and region assignment,\
+    \ breaking the cascade of bad decisions caused by greedy anchoring.\n- **Explicitly\
+    \ weights distances by data volume**, solving the problem of miniscule layers\
+    \ causing large\u2011volume layers to scatter.\n- **Forces proximity to I/O chiplets**,\
+    \ tackling the currently ignored ingress/egress bottleneck.\n- **Uses congestion\u2011\
+    aware optimization**, preventing hot\u2011spots that the existing mapper cannot\
+    \ see.\n- **Couples partitioning with placement**, allowing the mapper to choose\
+    \ how to split a layer rather than always assuming output\u2011channel splitting.\n\
+    \nImplementing this hierarchical mapper should yield a far lower total communication\
+    \ cost and thus a substantial latency reduction beyond the ~30\u202F% improvement\
+    \ seen in Iteration\u202F2."
+  function_name: volume_aware_nn_mapper
+  improvement_pct:
+    comm_latency: -10.094348590712494
+    compute_latency: -3230.862329803328
+    total_latency: -10.691804660426142
+  iteration: 3
+  metrics:
+    comm_latency: 117666.77
+    compute_latency: 660.51
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_cmos_heavy_volume_aware_nn_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 117666.77
+        compute_latency: 660.51
+        total_latency: 118327.27
+    results_label: alexnet_hetero_cmos_heavy_volume_aware_nn_mapper
+    total_latency: 118327.27
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

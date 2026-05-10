@@ -1,0 +1,453 @@
+baseline_metrics:
+  comm_latency: 106878.12
+  compute_latency: 14.98
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_top_imc_bottom_cmos/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 106893.11
+best_metrics:
+  comm_latency: 94630.09
+  compute_latency: 656.22
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_top_imc_bottom_cmos_nearest_neighbor_mapper_v3/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_top_imc_bottom_cmos_nearest_neighbor_mapper_v3
+  total_latency: 95286.31
+config: alexnet_hetero_top_imc_bottom_cmos
+history:
+- error: Simulation timed out after 900 seconds.
+  function_name: improved_mapper
+  iteration: 1
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- function_name: nearest_neighbor_mapper_v4
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 2
+- change_summary: "### 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\
+    \n- **Myopic anchoring to the single dominant chiplet of the previous layer**\
+    \  \n  For each new layer, the mapper selects as \u201Cstarting chiplet\u201D\
+    \ the one that received the largest percentage of the previous layer\u2019s allocation.\
+    \ All candidate chiplets are then sorted by distance from that single anchor.\
+    \ This ignores the fact that the previous layer may be spread across many chiplets.\
+    \ A more balanced set of sources would often yield lower total communication cost\
+    \ than forcing the next layer to cluster around a single, possibly peripheral,\
+    \ chiplet.\n\n- **Greedy, first-fit capacity allocation without fragmentation\
+    \ control**  \n  The algorithm tries to fill the nearest chiplet\u2019s remaining\
+    \ capacity as much as possible before moving to the next nearest. Over time this\
+    \ can create a \u201CSwiss cheese\u201D pattern of small leftover capacities scattered\
+    \ across the mesh. Later layers that need large contiguous space (e.g., a full\
+    \ chiplet\u2019s worth of weights) may fail even though enough total capacity\
+    \ exists.\n\n- **No global objective or lookahead**  \n  Placement is strictly\
+    \ sequential and deterministic. There is no weighting of future layers, no backtracking,\
+    \ and no attempt to reserve capacity or strategic start positions for upcoming\
+    \ large layers. A single poor early decision (e.g., starting far from I/O chiplets)\
+    \ can cascade into mapping failure for the whole network.\n\n- **Ignores activation\
+    \ communication volume and congestion**  \n  The cost metric uses only static\
+    \ shortest-path hop count. It does not consider the size of the activation tensors\
+    \ flowing between layers, the bandwidth of links, or the potential for network\
+    \ hotspot creation. In a 10\xD710 mesh with uniform links, communication energy\
+    \ and latency are dominated by the product of activation volume and hop count;\
+    \ ignoring this leads to suboptimal placement.\n\n- **Starvation of I/O locality**\
+    \  \n  The mapper pays no attention to the four corner I/O chiplets. The first\
+    \ layer (which consumes off\u2011chip input) and the last layer (which produces\
+    \ output) can end up arbitrarily far from the I/O nodes, adding unnecessary latency\
+    \ and energy for the data entering and leaving the chip.\n\n- **Load balancing\
+    \ based only on memory, not compute**  \n  Available capacity (weight units) is\
+    \ used as the sole resource for sorting chiplets. The actual computational load\
+    \ (total MACs) distributed to each chiplet is not considered. Consequently, one\
+    \ chiplet might be assigned a huge number of MACs while another sits almost idle,\
+    \ creating pipeline bubbles and under\u2011utilising the total compute throughput.\n\
+    \n- **The \u201Cactive_metric\u201D (performance/energy) is decorative**  \n \
+    \ Chiplet attributes like `performance` or `energy_efficiency` are read but only\
+    \ used as tertiary sort keys. The mapping algorithm does not translate the user\u2019\
+    s preference into a weighted cost function that truly trades off placement choices\u2014\
+    it remains heavily distance\u2011driven.\n\n### 2. Specific Opportunities for\
+    \ Improvement Given This Config\n\n- **Replace single\u2011chiplet anchor with\
+    \ a weighted centroid**  \n  For each subsequent layer, compute a \u201Ccentre\
+    \ of mass\u201D of all chiplets that host part of the previous layer, weighted\
+    \ by their fraction of the previous layer\u2019s output channels/MACs. Use this\
+    \ centroid as the reference point when sorting candidate chiplets by distance.\
+    \ This would spread the next layer more evenly and reduce average communication\
+    \ hops.\n\n- **Integrate I/O chiplet proximity for the first and last layers**\
+    \  \n  Identify which I/O chiplet(s) will inject the model\u2019s input and collect\
+    \ its output (e.g., the corner closest to the off\u2011chip memory controller).\
+    \ Seed the first layer near that I/O chiplet and, symmetrically, anchor the final\
+    \ layer near the output I/O chiplet. This can dramatically cut the long\u2011\
+    distance data movement at the boundaries of the inference pipeline.\n\n- **Incorporate\
+    \ activation size into the cost function**  \n  The layer definitions include\
+    \ `input_activation` and/or output dimensions. Multiply the hop distance between\
+    \ a candidate chiplet and the previous layer\u2019s chiplet(s) by the number of\
+    \ activation bits that will travel that path. Use this weighted distance as the\
+    \ primary sort key. For large activation\u2011heavy layers (e.g., early conv layers),\
+    \ this becomes much more important than weight\u2011capacity proximity.\n\n- **Reserve\
+    \ capacity for known large layers**  \n  Before starting the mapping, scan the\
+    \ model to identify layers that require more than, say, 80% of a chiplet\u2019\
+    s weight capacity. When placing earlier layers, preferentially consume capacity\
+    \ on chiplets that are *not* needed later to host those large layers. This simple\
+    \ lookahead avoids fragmentation\u2011induced failures.\n\n- **Balance computational\
+    \ load (MACs) explicitly**  \n  Maintain a running tally of expected MACs assigned\
+    \ to each chiplet. Use a combined score that penalizes chiplets that are already\
+    \ heavily loaded, creating a more uniform execution time across the mesh and reducing\
+    \ pipeline stalls.\n\n- **Use a more sophisticated partitioning of output channels**\
+    \  \n  Instead of allocating whole chiplet\u2011capacity chunks in one shot, decide\
+    \ how many output channels each chiplet should process based on a global optimisation\
+    \ of communication cost. For example, partition the output channels among the\
+    \ top\u2011k nearest chiplets proportionally to their remaining weight capacity,\
+    \ while also respecting the channel\u2011wise communication pattern (e.g., grouped\
+    \ convolution constraints).\n\n- **Introduce a simple iterative improvement step**\
+    \  \n  After a successful greedy mapping, apply a local search (e.g., swap layers\
+    \ between nearby chiplets, or shift the whole chain\u2019s start position) to\
+    \ reduce the sum of (activation\u2011size \xD7 hop\u2011count). The configuration\u2019\
+    s 10\xD710 mesh and 96 chiplets make this computationally feasible online.\n\n\
+    ### 3. Data / Signals the Mapper Currently Ignores That It Should Use\n\n| Data\
+    \ / Signal                                   | Why It Matters                \
+    \                                                 | How It Could Be Used     \
+    \                                                                            \
+    \     |\n|-------------------------------------------------|--------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|\n\
+    | **Activation tensor size (bytes) per layer**     | Dominates inter\u2011layer\
+    \ communication energy and time on the NoC.                | Weight candidate\
+    \ distances by `activation_size \xD7 hop_distance` to minimise transmitted bit\u2011\
+    miles.        |\n| **I/O chiplet positions and traffic direction**  | First/last\
+    \ layers must move data to/from I/O chiplets; ignoring I/O adds latency and energy.\
+    \ | Anchor first layer near input I/O, last layer near output I/O; include I/O\u2011\
+    to\u2011chiplet distance in cost.  |\n| **Per\u2011chiplet compute load (MACs\
+    \ assigned)**     | Unbalanced MAC load causes some chiplets to finish early while\
+    \ others lag.      | Track running MACs per chiplet and use it as a penalty term\
+    \ in sorting candidates.                       |\n| **Layer type and structural\
+    \ constraints**        | Some layers (e.g., depthwise conv, attention) have reuse\
+    \ patterns that affect optimal channel\u2011partitioning. | When partitioning\
+    \ output channels, ensure that attention heads or feature groups stay co\u2011\
+    located to avoid extra communication. |\n| **Network link bandwidth and injection\
+    \ rates**   | Hotspots and congestion can ruin a placement that looks good on\
+    \ pure hop count. | Incorporate a simple NoC congestion model (e.g., sum of expected\
+    \ offered load on each link) as a tie\u2011breaker. |\n| **Weight\u2011loading\
+    \ source and cost**               | With `weight_loading_strategy: all_at_once`,\
+    \ loading 2.46M weights per chiplet from a central DRAM through the I/O chiplets\
+    \ consumes time and energy. | Prefer to place weight\u2011heavy layers near the\
+    \ I/O interface to reduce initial loading distance.            |\n| **Performance\
+    \ / energy preference**              | The user explicitly sets `performance`\
+    \ vs `energy_efficiency` but it has no real effect. | Create a weighted composite\
+    \ cost: `\u03B1\xB7hops + (1\u2011\u03B1)\xB7energy_per_hop`, where \u03B1 is\
+    \ the performance preference; vary `\u03B1` to trade off latency vs. energy. |\n\
+    \nIncorporating these signals would transform the mapper from a greedy space\u2011\
+    filling heuristic into a communication\u2011aware, load\u2011balanced placement\
+    \ algorithm, significantly improving both mapping success rate and runtime inference\
+    \ performance on the 10\xD710 CMOS mesh."
+  function_name: nearest_neighbor_mapper_v4
+  improvement_pct:
+    comm_latency: -20.2517690243803
+    compute_latency: -4308.077436582109
+    total_latency: -20.852653646245304
+  iteration: 1
+  metrics:
+    comm_latency: 128522.83
+    compute_latency: 660.33
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_top_imc_bottom_cmos_nearest_neighbor_mapper_v4/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 128522.83
+        compute_latency: 660.33
+        total_latency: 129183.16
+    results_label: alexnet_hetero_top_imc_bottom_cmos_nearest_neighbor_mapper_v4
+    total_latency: 129183.16
+  outcome: NO_IMPROVEMENT
+- function_name: nearest_neighbor_mapper_v3
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on the previous analysis highlighting the mapper\u2019s myopic\
+    \ anchoring, greediness, and ignorance of activation volumes and I/O placement,\
+    \ I propose a **Weighted\u2011Centroid Communication\u2011Aware Mapper (WCCAM)**.\
+    \ It replaces the single\u2011chiplet anchor with a traffic\u2011conscious centroid,\
+    \ balances compute load, and treats I/O chiplets as key nodes.\n\n## 1. Core Strategy\n\
+    \nFor each layer `i`:\n\n- If `i == 0`: anchor placement near the **input I/O\
+    \ chiplet** (e.g., corner with lowest ID) to minimise off\u2011chip data ingress\
+    \ distance.\n- If `i == last`: anchor near the **output I/O chiplet** (opposite\
+    \ corner or predefined) to minimise egress distance.\n- Else: compute a **weighted\
+    \ centroid** of all chiplets that received a portion of the *previous* layer\u2019\
+    s output channels, with weights proportional to the fraction of the layer\u2019\
+    s total output channels (or MACs) they process.\n- For every candidate chiplet\
+    \ `c`, compute a **composite cost**:\n\n  `cost(c) = w_dist \xD7 H(centroid, c)\
+    \ + w_load \xD7 load_penalty(c) + w_io \xD7 io_penalty(c, first/last)`\n\n  where:\n\
+    \  - `H` = shortest\u2011path hop distance from the centroid.\n  - `load_penalty`\
+    \ = normalised ratio of MACs already assigned to `c` vs. its theoretical max (prevents\
+    \ compute hotspots).\n  - `io_penalty` = distance to the nearest I/O chiplet,\
+    \ applied only for input/output boundary layers.\n  - `w_dist`, `w_load`, `w_io`\
+    \ are tunable weights (can be set by performance/energy preference, e.g., `w_dist`\
+    \ gets higher weight for latency bias).\n\n- After sorting chiplets by cost, allocate\
+    \ capacity **not greedily**, but using a **proportional partition** of the layer\u2019\
+    s weights among the top\u2011N best candidates, respecting each chiplet\u2019\
+    s remaining weight capacity, so that fragmentation is reduced and the layer is\
+    \ spread evenly.\n\n## 2. How It Uses the Previously Ignored Signals\n\n- **Activation\
+    \ tensor size**: The centroid is weighted by the previous layer\u2019s output\
+    \ channel fractions, effectively capturing the communication volume; chiplets\
+    \ that handle more outputs pull the centroid closer, reducing the total bit\u2011\
+    miles.\n- **I/O chiplet positions**: First/last layers explicitly minimise distance\
+    \ to the I/O chiplets that handle ingress/egress. The `io_penalty` term enforces\
+    \ proximity.\n- **Compute load (MACs)**: The `load_penalty` tracks cumulative\
+    \ MACs assigned to each chiplet and penalises overloaded ones, resulting in a\
+    \ more balanced pipeline.\n- **Layer type constraints**: The proportional partition\
+    \ can be aligned with the partitioner\u2019s existing output\u2011channel splitting;\
+    \ for self\u2011attention, it avoids breaking head coherence (the partitioner\
+    \ already handles this, but we feed it a smoother distribution).\n- **Weight loading**:\
+    \ By anchoring the first layers near I/O, the heavy initial weight loading from\
+    \ DRAM is concentrated in the same region, cutting the loading distance.\n\n##\
+    \ 3. Detailed Algorithm (Modification to `_nearest_neighbor_mapper_v3`)\n\nBelow\
+    \ is pseudocode that replaces the existing mapping logic while preserving the\
+    \ interface. Key changes are highlighted in comments.\n\n```python\ndef _nearest_neighbor_mapper_v3(self,\
+    \ model_layer_info, system, preference, current_available_crossbars, layer_mappings=None,\
+    \ shortest_paths=None):\n    # ... existing imports and initialisation ...\n \
+    \   # 1. Determine if this layer is first or last\n    is_first_layer = (len(layer_mappings)\
+    \ == 0)\n    # We need to know if this is the last layer \u2013 this can be inferred\
+    \ from the model context\n    is_last_layer = model_layer_info.get('is_last')\
+    \  # must be provided by caller\n\n    # 2. Locate I/O chiplets (use the four\
+    \ corner IDs from chiplet_mapping.yaml)\n    io_ids = [1, 10, 91, 100]  # 10x10\
+    \ mesh corners; adjust as needed\n    # input I/O: e.g., lowest corner (1); output\
+    \ I/O: e.g., opposite (100)\n    input_io, output_io = io_ids[0], io_ids[-1]\n\
+    \n    # 3. Build weighted centroid of previous layer's chiplets\n    if not is_first_layer:\n\
+    \        prev_mapping = layer_mappings[-1][1]          # list of (chiplet_id,\
+    \ pct)\n        centroid_x, centroid_y, total_signal = 0, 0, 0\n        for cid,\
+    \ pct in prev_mapping:\n            if pct <= 0: continue\n            x, y =\
+    \ self.get_chiplet_coords(cid)       # assume we have a coord lookup\n       \
+    \     w = pct                                    # weight by assignment percentage\n\
+    \            centroid_x += x * w\n            centroid_y += y * w\n          \
+    \  total_signal += w\n        if total_signal > 0:\n            centroid_x /=\
+    \ total_signal\n            centroid_y /= total_signal\n        else:\n      \
+    \      # fallback: use single dominant chiplet\n            prev_leader = max(prev_mapping,\
+    \ key=lambda x: x[1])[0]\n            centroid_x, centroid_y = self.get_chiplet_coords(prev_leader)\n\
+    \    else:\n        # for the first layer, set centroid at the input I/O chiplet\n\
+    \        centroid_x, centroid_y = self.get_chiplet_coords(input_io)\n\n    # 4.\
+    \ Pre\u2011compute per\u2011chiplet compute load (MACs) normalised penalty\n \
+    \   max_macs_per_chiplet = 2.46e6 * 1e9 / ... # define a heuristic ceiling\n \
+    \   load_penalty = {}\n    for idx in self.compute_chiplet_indices:\n        chiplet_id\
+    \ = idx + 1\n        assigned_macs = self.macs_assigned.get(chiplet_id, 0)  #\
+    \ need to maintain this dict\n        load_penalty[chiplet_id] = min(assigned_macs\
+    \ / max_macs_per_chiplet, 1.0)\n\n    # 5. Tuneable weights (could be read from\
+    \ preference)\n    w_dist = 1.0\n    w_load = 0.3\n    w_io = 0.5 if (is_first_layer\
+    \ or is_last_layer) else 0.0\n\n    # 6. Compute cost for each eligible chiplet\n\
+    \    candidates = []\n    for idx in self.compute_chiplet_indices:\n        chiplet_id\
+    \ = idx + 1\n        if remaining_capacity[idx] <= 0:\n            continue\n\
+    \        # check allowed_chiplet_ids\n        if allowed and chiplet_id not in\
+    \ allowed_set:\n            continue\n\n        x, y = self.get_chiplet_coords(chiplet_id)\n\
+    \        dist_centroid = abs(x - centroid_x) + abs(y - centroid_y)  # Manhattan\
+    \ / hop\n        io_dist = min(abs(x - io_x) + abs(y - io_y) for io_x, io_y in\
+    \ [get_coords(io_id) for io_id in io_ids])  # nearest I/O\n        cost = (w_dist\
+    \ * dist_centroid\n                + w_load * load_penalty[chiplet_id]\n     \
+    \           + w_io * io_dist)\n        # Also store remaining capacity for proportional\
+    \ split\n        candidates.append((cost, chiplet_id, remaining_capacity[idx],\
+    \ load_penalty[chiplet_id]))\n\n    candidates.sort(key=lambda x: x[0])\n\n  \
+    \  # 7. Proportional allocation among the best candidates (up to N=4 or until\
+    \ capacity exhausted)\n    max_copies = 4\n    total_weights_needed = self._calculate_layer_requirements(model_layer_info,\
+    \ chiplets[0])  # same for all chiplets\n    weight_remaining = crossbars_required\n\
+    \    percentage_remaining = 100\n    action = [0] * num_chiplets\n\n    # Determine\
+    \ how many output channels are available (to split proportionally)\n    layer_out_channels\
+    \ = model_layer_info.get('out_channels')  # we need this info\n    chunk_out_channels\
+    \ = 0\n\n    for cost, cid, avail, _ in candidates[:max_copies]:\n        if weight_remaining\
+    \ <= 0:\n            break\n        idx = cid - 1\n        # Determine how many\
+    \ of the layer\u2019s weights this chiplet can host\n        max_weights_it_can_host\
+    \ = avail  # in weight units\n        # Proportionally allocate weights, but not\
+    \ more than this chiplet can hold\n        alloc_weight = min(weight_remaining,\
+    \ max_weights_it_can_host)\n        if alloc_weight <= 0:\n            continue\n\
+    \        # Convert weight units to percentage of layer\n        alloc_pct = (alloc_weight\
+    \ / crossbars_required) * 100.0 if crossbars_required > 0 else 0\n        # Round\
+    \ the channel count appropriately\n        ch = round(layer_out_channels * alloc_pct\
+    \ / 100.0)\n        if ch < 1: ch = 1  # ensure at least one channel\n       \
+    \ # Update capacities and action\n        remaining_capacity[idx] -= alloc_weight\n\
+    \        action[idx] = alloc_pct\n        weight_remaining -= alloc_weight\n \
+    \       percentage_remaining -= alloc_pct\n        chunk_out_channels += ch\n\n\
+    \    # 8. Adjust for any leftover due to rounding (similar to existing insufficient\
+    \ memory handling)\n    if weight_remaining > 10:\n        return remaining_capacity,\
+    \ None, True, \"INSUFFICIENT_MEMORY\"\n    # ... post\u2011processing: propagate\
+    \ out_channels count for partitioner ...\n    model_layer_info['chunk_out_channels']\
+    \ = chunk_out_channels  # feed to partitioner\n\n    # Update MACs load tracker\n\
+    \    self.macs_assigned = self._update_macs_tracker(action, model_layer_info)\n\
+    \n    return remaining_capacity, action, False, None\n```\n\n## 4. Expected Impact\
+    \ on This Config\n\n- **Reduced Average Communication Distance**: The centroid\
+    \ ensures the next layer hugs the \u201Cmass\u201D of the previous one, avoiding\
+    \ isolated chiplets. Activation bits travel shorter distances, cutting NoC latency.\n\
+    - **I/O Efficiency**: First layer sits beside input I/O; last layer beside output\
+    \ I/O. The initial and final data transfers avoid traversing the entire 10\xD7\
+    10 mesh.\n- **Balanced Compute**: `load_penalty` prevents a single chiplet from\
+    \ processing a disproportionate share of MACs, minimising pipeline stalls and\
+    \ improving overall throughput.\n- **Fragmentation Avoidance**: Proportional splitting\
+    \ over multiple chiplets distributes the weight requirement more evenly, reducing\
+    \ the chance that a large later layer cannot be placed because no single chiplet\
+    \ has enough contiguous space.\n- **Config Exploitation**: With 96 CMOS chiplets,\
+    \ an even spread (e.g., 3-4 chiplets per layer) is feasible; the tunable weights\
+    \ allow the user\u2019s performance/energy preference to actually steer the mapping.\n\
+    \nThis combined strategy directly attacks the mapper\u2019s current blind spots\
+    \ and has a high probability of improving mapping success and inference latency."
+  function_name: nearest_neighbor_mapper_v3
+  improvement_pct:
+    comm_latency: 11.45981048319338
+    compute_latency: -4280.64085447263
+    total_latency: 10.858323796547788
+  iteration: 2
+  metrics:
+    comm_latency: 94630.09
+    compute_latency: 656.22
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_top_imc_bottom_cmos_nearest_neighbor_mapper_v3/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 94630.09
+        compute_latency: 656.22
+        total_latency: 95286.31
+    results_label: alexnet_hetero_top_imc_bottom_cmos_nearest_neighbor_mapper_v3
+    total_latency: 95286.31
+  outcome: IMPROVED
+- function_name: gcc_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "### Analysis of the Nearest-Neighbor Mapper\u2019s Weaknesses in\
+    \ the Current Config\n\nThe `_nearest_neighbor_mapper_v3` method suffers from\
+    \ several critical limitations when applied to a 10\xD710 mesh with 96 CMOS chiplets\
+    \ and 4 corner I/O chiplets:\n\n1. **Myopic single\u2011chiplet anchor**  \n \
+    \  Each new layer is anchored to the chiplet that received the largest fraction\
+    \ of the previous layer, ignoring that the previous layer may be distributed over\
+    \ many chiplets. This forces all candidates to cluster around one node, increasing\
+    \ average communication hops and fragmenting capacity.\n\n2. **Greedy, first\u2011\
+    fit allocation without fragmentation foresight**  \n   The algorithm fills the\
+    \ nearest chiplet to capacity before considering others. Over several layers,\
+    \ this creates many partially filled chiplets (\u201CSwiss\u2011cheese\u201D pattern),\
+    \ making it impossible to place a large layer later even though total capacity\
+    \ suffices.\n\n3. **No global layer\u2011order awareness**  \n   Mapping is strictly\
+    \ sequential and deterministic, with no lookahead to reserve capacity for known\
+    \ large layers (e.g., >80% of a chiplet\u2019s weight capacity). A single poor\
+    \ early decision can cascade into a mapping failure for the whole network.\n\n\
+    4. **Ignores activation volume and inter\u2011layer traffic**  \n   Only static\
+    \ hop distance is used as cost; the actual size of activation tensors flowing\
+    \ between layers is never considered. In an AlexNet workload, early convolutional\
+    \ layers produce huge activation maps whose transport cost dominates energy and\
+    \ latency, yet this is completely omitted.\n\n5. **No I/O locality for ingress/egress**\
+    \  \n   The four corner I/O chiplets are invisible to the algorithm. The first\
+    \ layer (that reads input) and the last layer (that writes output) can end up\
+    \ arbitrarily far from the I/O, adding unnecessary long\u2011distance data transfers\
+    \ at the network boundaries.\n\n6. **Compute load imbalance**  \n   Capacity (weight\
+    \ units) is the sole resource metric; the actual MACs assigned to each chiplet\
+    \ are never tracked. Consequently some chiplets become compute\u2011heavy while\
+    \ others sit almost idle, creating pipeline bubbles.\n\n7. **Performance/energy\
+    \ preference is decorative**  \n   The `active_metric` is read but only used as\
+    \ a tertiary sort key, so the user\u2011specified trade\u2011off has no practical\
+    \ effect on placement quality.\n\n### New Optimization Strategy: Global Communication\u2011\
+    Constrained Bin Packing Mapper (GCC\u2011BPM)\n\n**Rationale**  \nThe previous\
+    \ improvement (WCCAM) addressed many of these issues but still maps layers one\
+    \ by one using a weighted centroid. That approach remains fundamentally greedy\
+    \ and does not consider the entire communication graph simultaneously. A fundamentally\
+    \ different strategy is to treat the whole neural network as a graph of **layer\
+    \ operations with weighted communication edges** and to solve a **constrained\
+    \ bin\u2011packing problem** that simultaneously assigns layer fractions to chiplets\
+    \ while minimizing inter\u2011chiplet communication.\n\nIn this new approach,\
+    \ we:\n- Pre\u2011partition layers into \u201Cchunks\u201D (e.g., groups of output\
+    \ channels) that fit within a configurable fraction of a chiplet\u2019s weight\
+    \ capacity.\n- Construct a graph where nodes are these layer\u2013chunk fragments,\
+    \ edges represent activation flow (volume \xD7 frequency), and node weights are\
+    \ the weight\u2011capacity demand.\n- Use a multilevel graph partitioning algorithm\
+    \ (e.g., recursive spectral bisection or Kernighan\u2013Lin refinement) to assign\
+    \ fragments to chiplets, minimising the weighted cut across the mesh, while respecting\
+    \ each chiplet\u2019s weight capacity.\n- After initial assignment, apply a local\
+    \ search (e.g., simulated annealing) that swaps fragments between nearby chiplets\
+    \ to further reduce communication cost and balance MAC loads.\n\nThis strategy\
+    \ is **global**: it considers all layers at once, naturally handles fragmentation\
+    \ by packing fragments of varying sizes, and directly incorporates activation\
+    \ volumes into the cut metric. It is also easily tuned to the mesh topology by\
+    \ using the actual Manhattan distance as the link weight during partitioning.\n\
+    \n### Detailed Algorithm Outline for `_gcc_mapper`\n\nBelow is the core logic\
+    \ that replaces the existing `_nearest_neighbor_mapper_v3`. It uses the same interface\
+    \ and capacity\u2011tracking scheme, but performs a global optimisation before\
+    \ allocating layer percentages.\n\n```python\ndef _gcc_mapper(self, model_layers,\
+    \ system, preference, current_available_crossbars, shortest_paths=None):\n   \
+    \ \"\"\"\n    Global mapping for all layers at once using graph partitioning.\n\
+    \    model_layers : list of layer_info dicts (the whole model)\n    \"\"\"\n \
+    \   # 1. Pre\u2011partition each layer into \"fragments\" of output channels.\n\
+    \    #    A fragment size is chosen so that its weight requirement is \u2264 80%\
+    \ of a chiplet's capacity.\n    #    The partitioner already knows how to split\
+    \ output channels; we reuse that logic.\n    fragments = []\n    for layer in\
+    \ model_layers:\n        frags = self._generate_fragments(layer, system)\n   \
+    \     fragments.extend(frags)\n\n    # 2. Build a communication graph G = (V,\
+    \ E).\n    #    Each fragment is a node, weighted by required weight units.\n\
+    \    #    Edges represent activation flow between consecutive layers (or residual\
+    \ connections).\n    #    Edge weight = size of activation tensor (in bits) flowing\
+    \ between the two fragments.\n    #    Also include edges to/from I/O chiplets\
+    \ for the first and last layers.\n    G = self._build_communication_graph(fragments,\
+    \ system)\n\n    # 3. Number of chiplets = 96 (compute chiplets only). Each chiplet\
+    \ has a capacity in weight units.\n    chiplet_capacities = [current_available_crossbars[i]\
+    \ for i in self.compute_chiplet_indices]\n    num_chiplets = len(self.compute_chiplet_indices)\n\
+    \n    # 4. Call a multilevel graph partitioner that assigns each fragment to a\
+    \ chiplet index,\n    #    minimising the weighted cut (communication) while respecting\
+    \ capacities.\n    #    Because the mesh is a grid, we can embed the target topology:\n\
+    \    #      - Use a recursive bipartitioning that maps the mesh\u2019s Manhattan\
+    \ distance to a linear ordering\n    #        (e.g., space\u2011filling curve,\
+    \ then assign contiguous chunks of fragments along the curve).\n    #    For simplicity,\
+    \ we can use a balanced k\u2011way partitioner like METIS with node weights\n\
+    \    #    and edge weights, then map partitions to chips using a greedy assignment\
+    \ that minimises\n    #    distance between heavily connected partition pairs.\n\
+    \    partition_map = self._partition_fragments(G, num_chiplets, chiplet_capacities,\
+    \ system)\n\n    # 5. Convert the fragment\u2011to\u2011chiplet assignment back\
+    \ to the per\u2011layer action percentages.\n    #    For each layer, aggregate\
+    \ the weight units assigned to each chiplet, compute percentages.\n    remaining_capacity\
+    \ = current_available_crossbars.copy()\n    layer_mappings = []\n    for layer\
+    \ in model_layers:\n        action = [0] * len(system.chiplets)\n        for frag\
+    \ in fragments_by_layer[layer]:\n            cid = partition_map[frag.id]\n  \
+    \          action[cid] += frag.weight_units  # accumulate weight units\n     \
+    \   # Normalize to percentage\n        total_units = sum(action)\n        if total_units\
+    \ > 0:\n            action = [100.0 * u / total_units for u in action]\n     \
+    \   # Update remaining capacity (subtract used weight units)\n        for i, a\
+    \ in enumerate(action):\n            used = round(total_units * a / 100.0)\n \
+    \           remaining_capacity[i] -= used\n        layer_mappings.append((layer['name'],\
+    \ [(i+1, pct) for i, pct in enumerate(action) if pct > 0]))\n\n    # After all\
+    \ layers are placed, verify no chiplet exceeded capacity.\n    if any(remaining_capacity[i]\
+    \ < 0 for i in self.compute_chiplet_indices):\n        return None, np.array([]),\
+    \ \"INSUFFICIENT_MEMORY\"\n\n    # Update system state with final capacity\n \
+    \   self.system.update_capacity_availability(remaining_capacity)\n\n    return\
+    \ layer_mappings, (initial_capacity - remaining_capacity), None\n```\n\n### How\
+    \ GCC\u2011BPM Differs from WCCAM and Exploits the Config\n\n- **Global vs. greedy**:\
+    \ GCC\u2011BPM solves an optimisation problem over the entire network, rather\
+    \ than making irrevocable layer\u2011by\u2011layer decisions. This avoids the\
+    \ fragmentation trap and can make trade\u2011offs that sacrifice local optimality\
+    \ for global benefit.\n- **Activation volume is the primary edge weight**: The\
+    \ graph partitioning cut directly minimises the product of activation bits and\
+    \ hop count, automatically yielding a placement that reduces NoC energy and latency.\n\
+    - **Better fragmentation control**: By partitioning layers into appropriately\
+    \ sized fragments *before* placement, we ensure that no single fragment exceeds\
+    \ a safe fraction of a chiplet\u2019s capacity. Large layers that wouldn\u2019\
+    t fit on a single chiplet are automatically spread across multiple chiplets in\
+    \ a balanced way, never blocked by \u201CSwiss cheese\u201D leftovers.\n- **I/O\
+    \ awareness**: The communication graph can include artificial I/O nodes, so the\
+    \ partitioner will naturally pull first\u2011layer fragments close to the input\
+    \ I/O corner and last\u2011layer fragments near the output I/O corner.\n- **Load\
+    \ balancing**: Node weights in the partitioner are weight units; edge weights\
+    \ are MAC\u2011related activation volumes. The partitioner\u2019s capacity constraints\
+    \ ensure weight\u2011space balance, but we can also use a post\u2011processing\
+    \ MAC\u2011balancing swap heuristic.\n- **Topology\u2011aware embedding**: Because\
+    \ the mesh is a grid, we can map the partition IDs to physical chiplet locations\
+    \ using a locality\u2011preserving scheme (e.g., Hilbert curve ordering) so that\
+    \ nearby partitions in the logical graph land on nearby chips on the mesh, further\
+    \ reducing hop count.\n\nThis approach treats mapping as a genuine optimization\
+    \ problem rather than a heuristic, directly addressing all the weaknesses identified,\
+    \ and it is clearly distinct from the weighted\u2011centroid method attempted\
+    \ previously. It is feasible for a 10\xD710 system with 96 chiplets and an AlexNet\u2011\
+    sized model to run in a few seconds if a fast multi\u2011level partitioner like\
+    \ METIS (or an in\u2011house spectral bisection) is used."
+  function_name: gcc_mapper
+  improvement_pct:
+    comm_latency: -42.897620205145834
+    compute_latency: -4667.623497997331
+    total_latency: -43.545715902549766
+  iteration: 3
+  metrics:
+    comm_latency: 152726.29
+    compute_latency: 714.19
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_top_imc_bottom_cmos_gcc_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 152726.29
+        compute_latency: 714.19
+        total_latency: 153440.48
+    results_label: alexnet_hetero_top_imc_bottom_cmos_gcc_mapper
+    total_latency: 153440.48
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

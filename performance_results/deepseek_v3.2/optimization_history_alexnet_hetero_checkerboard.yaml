@@ -1,0 +1,491 @@
+baseline_metrics:
+  comm_latency: 106916.16
+  compute_latency: 658.66
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_checkerboard/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 107574.82
+best_metrics:
+  comm_latency: 61668.63
+  compute_latency: 660.73
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_checkerboard_zone_based_comm_aware_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_checkerboard_zone_based_comm_aware_mapper
+  total_latency: 62329.36
+config: alexnet_hetero_checkerboard
+history:
+- function_name: topology_aware_nearest_neighbor
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "# Analysis of CHIPSIM Mapping Algorithm Weaknesses\n\nBased on\
+    \ the provided CHIPSIM configuration and mapping algorithm code, here are the\
+    \ key weaknesses and improvement opportunities:\n\n## 1. Key Weaknesses of Current\
+    \ Nearest-Neighbor Approach\n\n**A. Topology-Agnostic Placement Despite Mesh Layout**\n\
+    - The mapper only considers nearest-neighbor distances in hop count, ignoring\
+    \ the 10\xD710 mesh topology with corner IO chiplets\n- No awareness of mesh rows/columns\
+    \ or physical placement constraints\n- All 96 compute chiplets are treated equally\
+    \ despite their position in the mesh\n\n**B. Na\xEFve \"Starting Chiplet\" Selection**\n\
+    - First layer placement uses arbitrary criteria (largest available memory + metric\
+    \ value)\n- No consideration of workload patterns or input/output locations\n\
+    - With 4 corner IO chiplets, starting placement should consider proximity to input\
+    \ sources\n\n**C. Sequential Layer-to-Layer Dependency Blindness**\n- Each subsequent\
+    \ layer maps to chiplets nearest to the previous layer's *primary* chiplet (max\
+    \ percentage)\n- Ignores distributed nature of previous layer \u2013 if layer\
+    \ L1 is split across 5 chiplets, L2 should consider all 5\n- Creates unnecessary\
+    \ communication bottlenecks\n\n**D. Capacity Calculation Mismatch**\n- `_calculate_layer_requirements`\
+    \ computes capacity needed for *full layer* on each chiplet\n- But allocation\
+    \ uses `units_needed_for_resources = math.ceil(resources_remaining * units_needed_full\
+    \ / crossbars_required)`\n- This assumes linear scaling but doesn't account for\
+    \ partition overhead or non-linear resource needs\n\n**E. No Workload or Traffic\
+    \ Pattern Optimization**\n- Mapper ignores:\n  - AlexNet's specific layer sizes\
+    \ and communication patterns\n  - Activation/data movement between layers\n  -\
+    \ Weight reuse opportunities\n  - Convolution vs FC layer differences in communication\
+    \ needs\n\n**F. Single Metric Optimization**\n- `active_metric` chooses only one\
+    \ metric (performance or energy_efficiency)\n- No multi-objective optimization\
+    \ considering both simultaneously\n- No network congestion or thermal considerations\n\
+    \n## 2. Specific Opportunities for Improvement\n\n**Given 10\xD710 mesh with corner\
+    \ IO chiplets and AlexNet workload:**\n\n**A. Topology-Aware Placement**\n- Prioritize\
+    \ chiplets near IO chiplets for early layers (input processing)\n- Place later\
+    \ layers toward center to minimize end-to-end communication\n- Use mesh coordinates\
+    \ to create placement zones\n\n**B. Workload-Specific Optimization**\n- AlexNet\
+    \ layers vary dramatically in size:\n  - Early conv layers: large activations,\
+    \ moderate weights\n  - Later conv/FC layers: smaller activations, large weights\n\
+    - Map large-weight layers to chiplets with more available weight memory\n- Map\
+    \ high-activation layers considering activation movement to next layer\n\n**C.\
+    \ Communication-Aware Partitioning**\n- Instead of nearest-neighbor to single\
+    \ chiplet, minimize total communication cost:\n  - Consider all chiplets hosting\
+    \ previous layer\n  - Calculate communication matrix between layer partitions\n\
+    \  - Use bipartite graph matching for optimal placement\n\n**D. Load Balancing\
+    \ Beyond Nearest-Neighbor**\n- Current algorithm fills nearest chiplets first,\
+    \ potentially creating hotspots\n- Should consider:\n  - Memory utilization balance\
+    \ across mesh\n  - Network congestion avoidance\n  - Thermal distribution (if\
+    \ simulated)\n\n**E. Layer Splitting Optimization**\n- Current partitioner simply\
+    \ splits output channels proportionally\n- Could optimize for:\n  - Keeping attention\
+    \ heads intact on same chiplet\n  - Minimizing cross-chiplet communication for\
+    \ weight-shared layers\n  - Partitioning along dimensions that minimize inter-chiplet\
+    \ dependencies\n\n## 3. Missing Data/Signals the Mapper Should Use\n\n**A. Network\
+    \ Traffic Estimates**\n- Activation sizes between layers\n- Weight reuse patterns\n\
+    - Pipeline dependencies\n\n**B. Chiplet Performance Heterogeneity**\n - Though\
+    \ config shows \"hetero_checkerboard\", mapper doesn't use any heterogeneity metrics\n\
+    \ - Should consider:\n   - Different compute capacities\n   - Memory bandwidth\
+    \ variations\n   - Communication link speeds\n\n**C. Historical Utilization Patterns**\n\
+    - No learning from previous mappings\n- Could track:\n  - Which chiplets become\
+    \ congested\n  - Communication bottlenecks between specific pairs\n  - Thermal\
+    \ hotspots\n\n**D. Multi-Layer Lookahead**\n- Current mapper processes layers\
+    \ sequentially with no lookahead\n- Could optimize placement considering upcoming\
+    \ layers' needs\n- Especially important for AlexNet with distinct conv/FC phases\n\
+    \n**E. Input/Output Location Awareness**\n- IO chiplets at corners should influence\
+    \ early/late layer placement\n- Final output layers should be near output IO chiplets\n\
+    - Current mapper treats IO chiplets as excluded only\n\n## Recommended Immediate\
+    \ Improvements\n\n1. **Add mesh coordinate awareness** \u2013 use 10\xD710 grid\
+    \ positions to optimize placement zones\n2. **Implement communication cost matrix**\
+    \ \u2013 calculate costs between all chiplet pairs for each layer transition\n\
+    3. **Multi-chiplet previous layer consideration** \u2013 base next layer placement\
+    \ on all chiplets from previous layer, not just primary\n4. **Workload-specific\
+    \ heuristics** \u2013 for AlexNet: place conv1 near input IO, fc8 near output\
+    \ IO\n5. **Load balancing trigger** \u2013 if nearest chiplets are >80% utilized,\
+    \ skip to next nearest group\n\nThese changes would better utilize the 10\xD7\
+    10 mesh topology and AlexNet's specific characteristics while maintaining the\
+    \ nearest-neighbor framework's simplicity."
+  function_name: topology_aware_nearest_neighbor
+  improvement_pct:
+    comm_latency: 0.9953125888546771
+    compute_latency: -0.36893085962409494
+    total_latency: 0.9869595877548307
+  iteration: 1
+  metrics:
+    comm_latency: 105852.01
+    compute_latency: 661.09
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_checkerboard_topology_aware_nearest_neighbor/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 105852.01
+        compute_latency: 661.09
+        total_latency: 106513.1
+    results_label: alexnet_hetero_checkerboard_topology_aware_nearest_neighbor
+    total_latency: 106513.1
+  outcome: IMPROVED
+- function_name: zone_based_comm_aware_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on the analysis of the nearest-neighbor mapper and the 10\xD7\
+    10 mesh with corner IO chiplets running AlexNet, I recommend implementing **\"\
+    Zone-Based Mapping with Communication-Aware Partitioning\"**. This addresses the\
+    \ key weaknesses while maintaining algorithmic simplicity.\n\n## Optimization\
+    \ Strategy: Zone-Based Communication-Aware Mapper\n\n### Core Concept\nInstead\
+    \ of pure nearest-neighbor placement, divide the 10\xD710 mesh into functional\
+    \ zones and optimize communication between consecutive layers based on their data\
+    \ dependencies.\n\n### Key Changes to `_nearest_neighbor_mapper_v3`:\n\n```python\n\
+    def _zone_based_comm_aware_mapper(self, model_layer_info, system, preference,\
+    \ \n                                   current_available_crossbars, layer_mappings=None,\
+    \ \n                                   shortest_paths=None):\n    \"\"\"\n   \
+    \ Zone-based mapper for 10x10 mesh with corner IO chiplets.\n    Divides mesh\
+    \ into zones and optimizes communication between layers.\n    \"\"\"\n    # [Existing\
+    \ initialization code...]\n    \n    # 1. DETERMINE ZONE BASED ON LAYER POSITION\
+    \ IN NETWORK\n    layer_idx = model_layer_info.get('layer_index', 0)\n    total_layers\
+    \ = model_layer_info.get('total_layers', 1)\n    layer_type = model_layer_info['layer_type']\n\
+    \    \n    # Determine if this is early, middle, or late layer\n    layer_position\
+    \ = layer_idx / total_layers if total_layers > 0 else 0.5\n    \n    # 2. DEFINE\
+    \ ZONES FOR 10x10 MESH WITH CORNER IO\n    # IO chiplets at corners: (1,1), (1,10),\
+    \ (10,1), (10,10) in 1-based indexing\n    # Map 1D chiplet IDs to 2D mesh coordinates\n\
+    \    mesh_size = 10\n    \n    def chiplet_to_coords(chiplet_id):\n        \"\"\
+    \"Convert 1-based chiplet ID to (row, col) in 1-based mesh coords\"\"\"\n    \
+    \    row = ((chiplet_id - 1) // mesh_size) + 1\n        col = ((chiplet_id - 1)\
+    \ % mesh_size) + 1\n        return (row, col)\n    \n    def coords_to_zone(row,\
+    \ col):\n        \"\"\"Assign zone based on position in mesh\"\"\"\n        if\
+    \ (row <= 3 and col <= 3):  # Top-left zone (near IO at 1,1)\n            return\
+    \ \"input_near\"\n        elif (row <= 3 and col >= 8):  # Top-right zone (near\
+    \ IO at 1,10)\n            return \"input_near\" \n        elif (row >= 8 and\
+    \ col <= 3):  # Bottom-left zone (near IO at 10,1)\n            return \"output_near\"\
+    \n        elif (row >= 8 and col >= 8):  # Bottom-right zone (near IO at 10,10)\n\
+    \            return \"output_near\"\n        elif (4 <= row <= 7 and 4 <= col\
+    \ <= 7):  # Center zone\n            return \"compute_heavy\"\n        else: \
+    \ # Peripheral zones\n            return \"general\"\n    \n    # 3. CHOOSE TARGET\
+    \ ZONE BASED ON LAYER CHARACTERISTICS\n    target_zone = \"general\"  # Default\n\
+    \    \n    if layer_position < 0.2:  # Early layers (e.g., conv1, conv2)\n   \
+    \     target_zone = \"input_near\"\n    elif layer_position > 0.8:  # Late layers\
+    \ (e.g., fc7, fc8)\n        target_zone = \"output_near\"\n    elif layer_type\
+    \ == \"conv\" and model_layer_info.get('filter_size', 0) > 100000:\n        #\
+    \ Large conv layers benefit from center placement\n        target_zone = \"compute_heavy\"\
+    \n    \n    # 4. COMMUNICATION-AWARE STARTING CHIPLET SELECTION\n    if not layer_mappings:\n\
+    \        # First layer: choose best chiplet in target zone\n        candidate_chiplets\
+    \ = []\n        for chiplet_id in available_chiplet_ids:\n            row, col\
+    \ = chiplet_to_coords(chiplet_id)\n            zone = coords_to_zone(row, col)\n\
+    \            if zone == target_zone:\n                idx = chiplet_id - 1\n \
+    \               metric_value = chiplet_network.nodes[chiplet_id].get(active_metric,\
+    \ 0)\n                candidate_chiplets.append((chiplet_id, avail_memory_list[idx],\
+    \ metric_value))\n        \n        if not candidate_chiplets:\n            #\
+    \ Fall back to general zone\n            for chiplet_id in available_chiplets_ids:\n\
+    \                row, col = chiplet_to_coords(chiplet_id)\n                zone\
+    \ = coords_to_zone(row, col)\n                if zone == \"general\":\n      \
+    \              idx = chiplet_id - 1\n                    metric_value = chiplet_network.nodes[chiplet_id].get(active_metric,\
+    \ 0)\n                    candidate_chiplets.append((chiplet_id, avail_memory_list[idx],\
+    \ metric_value))\n        \n        if candidate_chiplets:\n            candidate_chiplets.sort(key=lambda\
+    \ x: (-x[1], -x[2]))\n            starting_chiplet = candidate_chiplets[0][0]\n\
+    \        else:\n            # Fall back to original logic\n            starting_chiplet\
+    \ = available_chiplet_ids[0]\n    else:\n        # NOT JUST nearest to primary\
+    \ chiplet - consider ALL chiplets from previous layer\n        last_layer_mapping\
+    \ = layer_mappings[-1][1]\n        \n        # Calculate communication cost to\
+    \ all available chiplets\n        comm_costs = []\n        for chiplet_id in available_chiplet_ids:\n\
+    \            total_cost = 0\n            for prev_chiplet_id, prev_percentage\
+    \ in last_layer_mapping:\n                if prev_percentage > 0:  # Only consider\
+    \ chiplets with actual allocation\n                    distance = shortest_paths.get(prev_chiplet_id,\
+    \ {}).get(chiplet_id, mesh_size*2)\n                    # Weight by percentage\
+    \ of previous layer on that chiplet\n                    weighted_cost = distance\
+    \ * (prev_percentage / 100.0)\n                    total_cost += weighted_cost\n\
+    \            \n            row, col = chiplet_to_coords(chiplet_id)\n        \
+    \    zone = coords_to_zone(row, col)\n            \n            # Zone preference:\
+    \ lower cost for target zone\n            zone_factor = 1.0\n            if zone\
+    \ == target_zone:\n                zone_factor = 0.7  # Prefer target zone\n \
+    \           elif zone == \"general\":\n                zone_factor = 1.0\n   \
+    \         else:\n                zone_factor = 1.3  # Penalize non-preferred zones\n\
+    \            \n            idx = chiplet_id - 1\n            comm_costs.append((chiplet_id,\
+    \ total_cost * zone_factor, avail_memory_list[idx]))\n        \n        # Sort\
+    \ by communication cost, then memory\n        comm_costs.sort(key=lambda x: (x[1],\
+    \ -x[2]))\n        \n        if comm_costs:\n            starting_chiplet = comm_costs[0][0]\n\
+    \        else:\n            # Fallback\n            starting_chiplet = last_layer_mapping[0][0]\n\
+    \    \n    # 5. MODIFIED CHIPLET ORDERING WITH ZONE PREFERENCE\n    chiplet_info\
+    \ = []\n    for chiplet_id in available_chiplet_ids:\n        idx = chiplet_id\
+    \ - 1\n        distance = shortest_paths.get(starting_chiplet, {}).get(chiplet_id,\
+    \ math.inf)\n        \n        row, col = chiplet_to_coords(chiplet_id)\n    \
+    \    zone = coords_to_zone(row, col)\n        \n        # Zone priority score\n\
+    \        zone_score = 0\n        if zone == target_zone:\n            zone_score\
+    \ = 3\n        elif zone == \"general\":\n            zone_score = 2\n       \
+    \ else:\n            zone_score = 1\n        \n        metric_value = chiplet_network.nodes[chiplet_id].get(active_metric,\
+    \ 0)\n        \n        # Composite score: zone, then distance, then memory\n\
+    \        chiplet_info.append((chiplet_id, zone_score, distance, avail_memory_list[idx],\
+    \ metric_value))\n    \n    # Sort by: zone_score (desc), distance, memory (desc),\
+    \ metric (desc)\n    chiplet_info.sort(key=lambda x: (-x[1], x[2], -x[3], -x[4]))\n\
+    \    \n    sorted_chiplets_ids = [chiplet_id for chiplet_id, _, _, _, _ in chiplet_info]\n\
+    \    \n    # 6. ALLOCATION WITH LOAD BALANCING CHECK\n    # [Keep existing allocation\
+    \ logic, but add...]\n    \n    # Check if nearest chiplets are overloaded (>80%\
+    \ utilization)\n    overload_threshold = 0.8\n    for chiplet_id in sorted_chiplets_ids[:5]:\
+    \  # Check first 5 nearest\n        chiplet_idx = chiplet_id - 1\n        total_memory\
+    \ = chiplets[chiplet_idx].get_total_memory()\n        used_memory = total_memory\
+    \ - (remaining_capacity[chiplet_idx] * chiplets[chiplet_idx].get_capacity_unit_size())\n\
+    \        \n        if total_memory > 0 and (used_memory / total_memory) > overload_threshold:\n\
+    \            # Skip to next group of chiplets\n            sorted_chiplets_ids\
+    \ = sorted_chiplets_ids[5:] + sorted_chiplets_ids[:5]\n            break\n   \
+    \ \n    # [Continue with existing allocation logic...]\n```\n\n### Companion Changes\
+    \ to Layer Partitioner:\n\n```python\ndef partition_layer_comm_aware(self, layer_def,\
+    \ chiplet_mappings, prev_layer_mappings=None):\n    \"\"\"\n    Enhanced partitioner\
+    \ that minimizes cross-chiplet communication.\n    \"\"\"\n    # [Existing partition\
+    \ logic...]\n    \n    # For attention layers: try to keep heads together\n  \
+    \  if is_attention_layer:\n        num_heads = params.get('num_heads', 1)\n  \
+    \      embed_dim = params.get('output_channels', 768)\n        head_dim = embed_dim\
+    \ // num_heads\n        \n        # Group heads by chiplet to minimize attention\
+    \ head splitting\n        # [Implementation for keeping attention heads intact]\n\
+    \    \n    # For conv layers with small kernel: minimize activation movement\n\
+    \    if is_conv_layer and params.get('kernel_size', 3) <= 3:\n        # Partition\
+    \ to minimize halo region communication\n        # [Implementation for convolution-aware\
+    \ partitioning]\n    \n    return network_chunks\n```\n\n### Why This Strategy\
+    \ is Different:\n\n1. **Topology-Aware Zones**: Uses the actual 10\xD710 mesh\
+    \ layout with corner IO chiplets\n2. **Workload-Aware Placement**: Early layers\
+    \ near input, late layers near output, large layers in center\n3. **Communication\
+    \ Cost Minimization**: Considers ALL chiplets from previous layer, not just primary\n\
+    4. **Load Balancing**: Skips overloaded nearest neighbors to prevent hotspots\n\
+    5. **Zone Priority**: Prefers chiplets in optimal zones for each layer type\n\n\
+    ### Expected Benefits for AlexNet on 10\xD710 Mesh:\n\n- **Early conv layers**\
+    \ mapped near corner IO chiplets \u2192 reduced input data movement\n- **Large\
+    \ conv3** placed in center zone \u2192 balanced compute and communication\n- **FC\
+    \ layers** gradually move toward output zones \u2192 reduced final output latency\n\
+    - **Communication-aware partitioning** \u2192 20-30% reduction in inter-chiplet\
+    \ data movement\n- **Load balancing** \u2192 better utilization of all 96 compute\
+    \ chiplets\n\nThis approach maintains the simplicity of nearest-neighbor while\
+    \ adding critical topology and workload awareness missing from the original algorithm."
+  function_name: zone_based_comm_aware_mapper
+  improvement_pct:
+    comm_latency: 42.32057155812555
+    compute_latency: -0.31427443597608024
+    total_latency: 42.059526569507625
+  iteration: 2
+  metrics:
+    comm_latency: 61668.63
+    compute_latency: 660.73
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_checkerboard_zone_based_comm_aware_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 61668.63
+        compute_latency: 660.73
+        total_latency: 62329.36
+    results_label: alexnet_hetero_checkerboard_zone_based_comm_aware_mapper
+    total_latency: 62329.36
+  outcome: IMPROVED
+- error: Simulation timed out after 900 seconds.
+  function_name: workload_aware_cluster_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- error: Simulation timed out after 900 seconds.
+  function_name: workload_aware_cluster_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 2
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/map"
+  function_name: workload_aware_cluster_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 3
+- change_summary: "Based on the previous results showing significant improvement (106513.1\
+    \ \u2192 62329.36 latency), the zone-based approach worked well. Now I'll recommend\
+    \ a **different optimization strategy** focusing on **workload-aware adaptive\
+    \ clustering** that addresses the mapper's limitations in a complementary way.\n\
+    \n## New Strategy: Workload-Aware Adaptive Cluster Mapper\n\n### Core Concept\n\
+    Instead of fixed zones, dynamically form clusters of chiplets based on layer characteristics\
+    \ and communicate these clusters between layers to minimize data movement.\n\n\
+    ### Key Changes to Mapper:\n\n```python\ndef _workload_aware_cluster_mapper(self,\
+    \ model_layer_info, system, preference, \n                                   current_available_crossbars,\
+    \ layer_mappings=None, \n                                   shortest_paths=None):\n\
+    \    \"\"\"\n    Adaptive cluster-based mapper that forms optimal chiplet clusters\
+    \ per layer type.\n    \"\"\"\n    # [Initialization from original mapper...]\n\
+    \    \n    layer_name = model_layer_info['name']\n    layer_type = model_layer_info['layer_type']\n\
+    \    crossbars_required = model_layer_info['crossbars_required']\n    total_macs\
+    \ = model_layer_info.get('total_macs', 0)\n    \n    # 1. DETERMINE OPTIMAL CLUSTER\
+    \ SIZE BASED ON LAYER CHARACTERISTICS\n    def determine_cluster_size(layer_type,\
+    \ crossbars_required, total_macs):\n        \"\"\"Dynamically determine how many\
+    \ chiplets should form a cluster for this layer.\"\"\"\n        \n        # Base\
+    \ cluster size on computational intensity and memory requirements\n        if\
+    \ layer_type == 'conv':\n            # For conv layers, consider activation reuse\n\
+    \            if crossbars_required > 50:  # Very large conv layer\n          \
+    \      return min(12, len(available_chiplet_ids) // 4)\n            elif crossbars_required\
+    \ > 20:\n                return min(8, len(available_chiplet_ids) // 6)\n    \
+    \        else:\n                return min(4, len(available_chiplet_ids) // 8)\n\
+    \                \n        elif layer_type == 'fc':\n            # FC layers often\
+    \ benefit from smaller, tighter clusters\n            # due to all-to-all weight-activation\
+    \ patterns\n            if crossbars_required > 100:  # Very large FC layer\n\
+    \                return min(6, len(available_chiplet_ids) // 8)\n            else:\n\
+    \                return min(3, len(available_chiplet_ids) // 12)\n           \
+    \     \n        elif layer_type == 'self_attention':\n            # Attention\
+    \ layers benefit from moderate-sized clusters\n            # to keep QKV projections\
+    \ close\n            return min(4, len(available_chiplet_ids) // 10)\n       \
+    \ \n        # Default: small cluster\n        return min(2, len(available_chiplet_ids)\
+    \ // 16)\n    \n    optimal_cluster_size = determine_cluster_size(layer_type,\
+    \ crossbars_required, total_macs)\n    \n    # 2. FIND BEST CLUSTER LOCATION BASED\
+    \ ON PREVIOUS LAYER(S)\n    if not layer_mappings:\n        # First layer: place\
+    \ near input IO chiplets\n        input_io_chiplets = [1, 10, 91, 100]  # Corner\
+    \ chiplets in 10x10 mesh\n        best_cluster = self._find_optimal_cluster(\n\
+    \            available_chiplet_ids, \n            input_io_chiplets, \n      \
+    \      optimal_cluster_size,\n            remaining_capacity,\n            shortest_paths,\n\
+    \            \"input\"\n        )\n    else:\n        # Calculate center of mass\
+    \ of previous layer's allocation\n        prev_layer_allocations = layer_mappings[-1][1]\n\
+    \        prev_chiplets = []\n        for chiplet_id, percentage in prev_layer_allocations:\n\
+    \            if percentage > 5:  # Only consider significant allocations\n   \
+    \             weight = percentage / 100.0\n                # Convert to mesh coordinates\
+    \ for center calculation\n                row = ((chiplet_id - 1) // 10) + 1\n\
+    \                col = ((chiplet_id - 1) % 10) + 1\n                prev_chiplets.append((chiplet_id,\
+    \ row, col, weight))\n        \n        if prev_chiplets:\n            # Calculate\
+    \ weighted center\n            total_weight = sum(w for _, _, _, w in prev_chiplets)\n\
+    \            if total_weight > 0:\n                center_row = sum(r * w for\
+    \ _, r, _, w in prev_chiplets) / total_weight\n                center_col = sum(c\
+    \ * w for _, _, c, w in prev_chiplets) / total_weight\n                \n    \
+    \            # Find chiplet closest to center\n                center_chiplet\
+    \ = min(\n                    available_chiplet_ids,\n                    key=lambda\
+    \ cid: ((cid-1)//10 + 1 - center_row)**2 + ((cid-1)%10 + 1 - center_col)**2\n\
+    \                )\n                \n                best_cluster = self._find_optimal_cluster(\n\
+    \                    available_chiplet_ids,\n                    [center_chiplet],\n\
+    \                    optimal_cluster_size,\n                    remaining_capacity,\n\
+    \                    shortest_paths,\n                    \"compute\"\n      \
+    \          )\n            else:\n                # Fallback to nearest neighbor\n\
+    \                last_primary = max(prev_layer_allocations, key=lambda x: x[1])[0]\n\
+    \                best_cluster = self._find_optimal_cluster(\n                \
+    \    available_chiplet_ids,\n                    [last_primary],\n           \
+    \         optimal_cluster_size,\n                    remaining_capacity,\n   \
+    \                 shortest_paths,\n                    \"compute\"\n         \
+    \       )\n        else:\n            # No previous allocations (shouldn't happen)\n\
+    \            best_cluster = available_chiplet_ids[:optimal_cluster_size]\n   \
+    \ \n    # 3. ALLOCATE WITHIN CLUSTER USING MEMORY-AWARE DISTRIBUTION\n    action\
+    \ = [0] * num_chiplets\n    resources_remaining = crossbars_required\n    percentage_remaining\
+    \ = 100\n    \n    # Sort cluster chiplets by available capacity (descending)\n\
+    \    cluster_with_capacity = []\n    for chiplet_id in best_cluster:\n       \
+    \ idx = chiplet_id - 1\n        if remaining_capacity[idx] > 0:\n            cluster_with_capacity.append((chiplet_id,\
+    \ remaining_capacity[idx]))\n    \n    cluster_with_capacity.sort(key=lambda x:\
+    \ x[1], reverse=True)\n    \n    # Calculate total capacity in cluster\n    cluster_total_capacity\
+    \ = sum(cap for _, cap in cluster_with_capacity)\n    \n    if cluster_total_capacity\
+    \ > 0:\n        # Distribute proportionally to capacity within cluster\n     \
+    \   for chiplet_id, capacity in cluster_with_capacity:\n            if resources_remaining\
+    \ <= 0:\n                break\n            \n            # Calculate this chiplet's\
+    \ share based on its proportion of cluster capacity\n            capacity_share\
+    \ = capacity / cluster_total_capacity\n            \n            # Convert to\
+    \ percentage of layer\n            alloc_percentage = min(percentage_remaining,\
+    \ capacity_share * 100)\n            \n            # Calculate actual resources\
+    \ needed\n            chiplet_idx = chiplet_id - 1\n            units_needed_full\
+    \ = self._calculate_layer_requirements(model_layer_info, chiplets[chiplet_idx])\n\
+    \            \n            if units_needed_full > 0:\n                units_for_alloc\
+    \ = math.ceil(alloc_percentage * units_needed_full / 100)\n                \n\
+    \                if units_for_alloc <= remaining_capacity[chiplet_idx]:\n    \
+    \                remaining_capacity[chiplet_idx] -= units_for_alloc\n        \
+    \            action[chiplet_idx] = alloc_percentage\n                    percentage_remaining\
+    \ -= alloc_percentage\n                    resources_remaining -= math.ceil(alloc_percentage\
+    \ * crossbars_required / 100)\n                else:\n                    # Can't\
+    \ allocate full share, use what's available\n                    actual_alloc\
+    \ = (remaining_capacity[chiplet_idx] * 100) / units_needed_full\n            \
+    \        remaining_capacity[chiplet_idx] = 0\n                    action[chiplet_idx]\
+    \ = actual_alloc\n                    percentage_remaining -= actual_alloc\n \
+    \                   resources_remaining -= math.ceil(actual_alloc * crossbars_required\
+    \ / 100)\n    \n    # 4. IF CLUSTER INSUFFICIENT, EXPAND TO NEARBY CHIPLETS\n\
+    \    if resources_remaining > 0 and percentage_remaining > 5:\n        # Find\
+    \ chiplets adjacent to the cluster\n        expanded_cluster = self._expand_cluster(\n\
+    \            best_cluster,\n            available_chiplet_ids,\n            resources_remaining,\n\
+    \            remaining_capacity,\n            shortest_paths\n        )\n    \
+    \    \n        # Allocate remaining resources to expanded cluster\n        for\
+    \ chiplet_id in expanded_cluster:\n            if resources_remaining <= 0:\n\
+    \                break\n                \n            chiplet_idx = chiplet_id\
+    \ - 1\n            if remaining_capacity[chiplet_idx] <= 0:\n                continue\n\
+    \                \n            units_needed_full = self._calculate_layer_requirements(model_layer_info,\
+    \ chiplets[chiplet_idx])\n            if units_needed_full <= 0:\n           \
+    \     continue\n                \n            # Calculate what percentage we still\
+    \ need to allocate\n            needed_pct = min(100, (resources_remaining * 100)\
+    \ / crossbars_required)\n            \n            # Calculate what this chiplet\
+    \ can provide\n            max_pct_from_chiplet = (remaining_capacity[chiplet_idx]\
+    \ * 100) / units_needed_full\n            alloc_pct = min(needed_pct, max_pct_from_chiplet,\
+    \ percentage_remaining)\n            \n            if alloc_pct > 0:\n       \
+    \         units_needed = math.ceil(alloc_pct * units_needed_full / 100)\n    \
+    \            if units_needed <= remaining_capacity[chiplet_idx]:\n           \
+    \         remaining_capacity[chiplet_idx] -= units_needed\n                  \
+    \  action[chiplet_idx] += alloc_pct\n                    percentage_remaining\
+    \ -= alloc_pct\n                    resources_remaining -= math.ceil(alloc_pct\
+    \ * crossbars_required / 100)\n    \n    # [Error handling and return same as\
+    \ original...]\n\ndef _find_optimal_cluster(self, available_chiplets, anchor_chiplets,\
+    \ cluster_size, \n                         remaining_capacity, shortest_paths,\
+    \ cluster_type=\"compute\"):\n    \"\"\"\n    Find optimal cluster of chiplets\
+    \ near anchor points.\n    \"\"\"\n    # Score each available chiplet based on\
+    \ multiple factors\n    chiplet_scores = []\n    \n    for chiplet_id in available_chiplets:\n\
+    \        idx = chiplet_id - 1\n        \n        # 1. Distance to nearest anchor\n\
+    \        min_distance = min(\n            shortest_paths.get(anchor, {}).get(chiplet_id,\
+    \ 100)\n            for anchor in anchor_chiplets\n        )\n        \n     \
+    \   # 2. Available capacity (normalized)\n        max_capacity = max(remaining_capacity)\
+    \ if max(remaining_capacity) > 0 else 1\n        capacity_score = remaining_capacity[idx]\
+    \ / max_capacity\n        \n        # 3. Mesh position score (prefer center for\
+    \ compute, edges for IO-bound)\n        row = ((chiplet_id - 1) // 10) + 1\n \
+    \       col = ((chiplet_id - 1) % 10) + 1\n        \n        if cluster_type ==\
+    \ \"input\":\n            # Prefer chiplets near input corners\n            position_score\
+    \ = 1 / (min(row, col) + 1)\n        elif cluster_type == \"output\":\n      \
+    \      # Prefer chiplets near output corners\n            position_score = 1 /\
+    \ (min(11-row, 11-col) + 1)\n        else:\n            # For compute: prefer\
+    \ central chiplets\n            center_dist = abs(row - 5.5) + abs(col - 5.5)\n\
+    \            position_score = 1 / (center_dist + 1)\n        \n        # 4. Connectivity\
+    \ score (number of available neighbors)\n        neighbor_ids = [chiplet_id-10,\
+    \ chiplet_id-1, chiplet_id+1, chiplet_id+10]\n        available_neighbors = sum(1\
+    \ for nid in neighbor_ids \n                                 if 1 <= nid <= 100\
+    \ and nid in available_chiplets)\n        connectivity_score = available_neighbors\
+    \ / 4.0\n        \n        # Composite score (weights can be tuned)\n        total_score\
+    \ = (\n            -0.4 * min_distance +          # Distance is negative (closer\
+    \ is better)\n            0.3 * capacity_score +         # Higher capacity is\
+    \ better\n            0.2 * position_score +         # Better position is better\n\
+    \            0.1 * connectivity_score      # Better connectivity is better\n \
+    \       )\n        \n        chiplet_scores.append((chiplet_id, total_score))\n\
+    \    \n    # Sort by score and take top cluster_size\n    chiplet_scores.sort(key=lambda\
+    \ x: x[1], reverse=True)\n    cluster = [cid for cid, _ in chiplet_scores[:cluster_size]]\n\
+    \    \n    # Ensure cluster is connected (if possible)\n    return self._ensure_cluster_connectivity(cluster,\
+    \ available_chiplets, shortest_paths)\n\ndef _expand_cluster(self, original_cluster,\
+    \ available_chiplets, resources_needed,\n                   remaining_capacity,\
+    \ shortest_paths, max_expansion=5):\n    \"\"\"\n    Expand cluster by adding\
+    \ nearby chiplets with good capacity.\n    \"\"\"\n    # Find chiplets adjacent\
+    \ to the cluster\n    adjacent = set()\n    for chiplet_id in original_cluster:\n\
+    \        # 4-connected neighbors\n        neighbors = [chiplet_id-10, chiplet_id-1,\
+    \ chiplet_id+1, chiplet_id+10]\n        for nid in neighbors:\n            if\
+    \ (1 <= nid <= 100 and \n                nid in available_chiplets and \n    \
+    \            nid not in original_cluster):\n                adjacent.add(nid)\n\
+    \    \n    # Sort adjacent chiplets by capacity and proximity to cluster center\n\
+    \    expanded = list(adjacent)\n    \n    # Calculate cluster center\n    if original_cluster:\n\
+    \        rows = [((cid-1)//10 + 1) for cid in original_cluster]\n        cols\
+    \ = [((cid-1)%10 + 1) for cid in original_cluster]\n        center_row = sum(rows)\
+    \ / len(rows)\n        center_col = sum(cols) / len(cols)\n        \n        expanded.sort(key=lambda\
+    \ cid: (\n            -remaining_capacity[cid-1],  # Higher capacity first\n \
+    \           abs(((cid-1)//10 + 1) - center_row) + abs(((cid-1)%10 + 1) - center_col)\n\
+    \        ))\n    \n    # Return up to max_expansion additional chiplets\n    return\
+    \ expanded[:max_expansion]\n```\n\n### Why This Strategy is Different and Complementary:\n\
+    \n1. **Dynamic Cluster Sizing**: Adapts to each layer's needs rather than using\
+    \ fixed zones\n2. **Center-of-Mass Calculation**: Considers the entire previous\
+    \ layer distribution, not just the primary chiplet\n3. **Capacity-Proportional\
+    \ Allocation**: Distributes work within cluster based on available capacity\n\
+    4. **Controlled Expansion**: Only expands beyond initial cluster when necessary\n\
+    5. **Connectivity-Aware**: Prefers forming connected clusters to minimize intra-layer\
+    \ communication\n\n### Expected Benefits:\n\n1. **Better Load Distribution**:\
+    \ Capacity-proportional allocation prevents overloading nearest chiplets\n2. **Adaptive\
+    \ to Layer Types**: Different cluster strategies for conv vs FC vs attention layers\n\
+    3. **Minimizes Hops**: Connected clusters reduce intra-layer communication costs\n\
+    4. **Scalable**: Works well on the 10\xD710 mesh regardless of where previous\
+    \ layer was placed\n5. **Resource-Aware**: Considers actual available capacity,\
+    \ not just proximity\n\n### For AlexNet Specifically:\n\n- **Conv1-2**: Form small\
+    \ clusters near input corners (4-6 chiplets)\n- **Conv3-5**: Form moderate clusters\
+    \ (6-8 chiplets) near previous layers' center\n- **FC6-8**: Form tight clusters\
+    \ (3-4 chiplets) with high connectivity for all-to-all patterns\n- **Gradual Migration**:\
+    \ Natural progression from input to output corners via cluster centers\n\nThis\
+    \ approach fundamentally changes the allocation strategy from \"nearest-first\"\
+    \ to \"cluster-first-with-expansion\", which should provide different optimization\
+    \ characteristics than the zone-based approach while still being topology-aware."
+  function_name: workload_aware_cluster_mapper
+  improvement_pct:
+    comm_latency: 23.88686612014498
+    compute_latency: -0.6467676798348149
+    total_latency: 23.736660679515907
+  iteration: 3
+  metrics:
+    comm_latency: 81377.24
+    compute_latency: 662.92
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_imc_heavy_stage_aware_network_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 81377.24
+        compute_latency: 662.92
+        total_latency: 82040.15
+    results_label: alexnet_hetero_checkerboard_workload_aware_cluster_mapper
+    total_latency: 82040.15
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3

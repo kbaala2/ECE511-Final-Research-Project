@@ -1,0 +1,383 @@
+baseline_metrics:
+  comm_latency: 106878.12
+  compute_latency: 14.98
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_imc_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 106893.11
+best_metrics:
+  comm_latency: 81377.24
+  compute_latency: 662.92
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_imc_heavy_stage_aware_network_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_imc_heavy_stage_aware_network_mapper
+  total_latency: 82040.15
+config: alexnet_hetero_imc_heavy
+history:
+- function_name: stage_aware_network_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the `_nearest_neighbor_mapper_v3` algorithm\
+    \ and the provided CHIPSIM configuration, here are the key weaknesses and improvement\
+    \ opportunities:\n\n## 1. Key Weaknesses of the Current Nearest-Neighbor Approach\n\
+    \n### **A. Topology-Agnostic Network Distance**\n- **Issue**: The mapper uses\
+    \ only hop count (`shortest_paths`) without considering actual network characteristics\n\
+    - **Impact**: On a 10x10 mesh, a hop at the center vs. edge has different bandwidth/latency\
+    \ due to traffic congestion\n- **Evidence**: The mapper ignores:\n  - Network\
+    \ link bandwidth variations\n  - Traffic contention from neighboring chiplets\n\
+    \  - Non-uniform IO placement (4 IO chiplets at corners only)\n\n### **B. Load\
+    \ Imbalance Due to Sequential Processing**\n- **Issue**: The mapper processes\
+    \ layers sequentially, always starting from the \"nearest neighbor\" of the previous\
+    \ layer\n- **Impact**: Creates hotspots around starting points, leaving distant\
+    \ chiplets underutilized\n- **Evidence**: From line 390-391:\n  ```python\n  last_layer_mapping\
+    \ = layer_mappings[-1][1]\n  last_chiplet = max(last_layer_mapping, key=lambda\
+    \ x: x[1])[0] \n  starting_chiplet = last_chiplet\n  ```\n  This creates dependency\
+    \ chains that exacerbate spatial imbalance\n\n### **C. Memory Fragmentation from\
+    \ Percentage-Based Allocation**\n- **Issue**: The percentage-based allocation\
+    \ (`alloc_percentage`) splits layers across many chiplets\n- **Impact**: Creates\
+    \ many small, fragmented partitions that increase cross-chiplet communication\
+    \ overhead\n- **Evidence**: Algorithm allocates partial percentages to many chiplets\
+    \ (line 422-441), rather than consolidating on fewer chiplets\n\n### **D. Ignoring\
+    \ Chiplet Heterogeneity**\n- **Issue**: All 96 compute chiplets are treated uniformly\
+    \ despite potential manufacturing variations\n- **Impact**: Misses opportunities\
+    \ to place critical layers on higher-performing chiplets\n- **Evidence**: The\
+    \ system has \"hetero_imc_heavy\" mapping but mapper doesn't exploit performance\
+    \ variations\n\n### **E. No Consideration of Layer Communication Patterns**\n\
+    - **Issue**: Mapper doesn't consider:\n  - Layer-to-layer data dependencies\n\
+    \  - Activation sizes between layers\n  - Whether layers can be pipelined or must\
+    \ run sequentially\n- **Impact**: Adjacent layers in computation graph may be\
+    \ placed far apart\n\n## 2. Specific Opportunities for This Configuration\n\n\
+    ### **A. Exploit Mesh Topology Structure**\n- **10x10 mesh with corner IOs**:\
+    \ \n  - Place early/late layers near IO corners to reduce data movement\n  - Use\
+    \ central chiplets for intermediate layers with high internal computation\n  -\
+    \ Current mapper treats all positions equally\n\n### **B. Layer Grouping Optimization**\n\
+    - **AlexNet workload** (from config): Has distinct conv/fc stage boundaries\n\
+    - **Opportunity**: Group layers by stage and map each stage contiguously\n- **Current\
+    \ limitation**: Each layer mapped independently\n\n### **C. Weight Stationary\
+    \ Optimization**\n- **Config setting**: `weight_stationary: true`\n- **Implication**:\
+    \ Once weights are loaded, they should stay put\n- **Opportunity**: Map layers\
+    \ with shared weights to same/similar chiplets\n- **Current gap**: No weight reuse\
+    \ consideration in mapping\n\n## 3. Critical Data/Signals the Mapper Ignores\n\
+    \n### **A. Inter-Layer Dataflow Dependencies**\n- **Missing**: Complete computation\
+    \ graph with activation sizes\n- **Needed**: To minimize data movement between\
+    \ dependent layers\n\n### **B. Network Load Information**\n- **Missing**: Real-time\
+    \ or predicted network congestion\n- **Needed**: To avoid routing through already-congested\
+    \ paths\n\n### **C. Chiplet Performance/Health Metrics**\n- **Missing**: Individual\
+    \ chiplet performance characteristics\n- **Needed**: For intelligent load balancing\
+    \ and critical path optimization\n\n### **D. Layer Computational Characteristics**\n\
+    - **Missing**: Ratio of computation to communication for each layer\n- **Needed**:\
+    \ To decide whether to consolidate (compute-heavy) or distribute (comm-heavy)\n\
+    \n### **E. Temporal Access Patterns**\n- **Missing**: Whether layers will be executed\
+    \ multiple times\n- **Needed**: For caching/reuse optimization in weight-stationary\
+    \ mode\n\n## Recommended Algorithm Improvements\n\n1. **Add Contiguity Score**:\
+    \ Prefer placing layer partitions in contiguous regions rather than scattered\n\
+    2. **Two-Level Mapping**: First group layers into stages, then map stages considering\
+    \ IO positions\n3. **Backtracking Search**: Allow reconsideration of previous\
+    \ layer placements when current layer can't fit well\n4. **Network-Aware Cost\
+    \ Function**: Incorporate estimated communication cost based on:\n   - Activation\
+    \ sizes between layers\n   - Current network load in relevant paths\n   - Distance\
+    \ to nearest IO chiplet for input/output layers\n\n5. **Load Rebalancing Pass**:\
+    \ After initial mapping, identify underutilized chiplets and migrate appropriate\
+    \ partitions\n\nThe current nearest-neighbor approach is fundamentally limited\
+    \ by its myopic, layer-by-layer optimization. For the 10x10 mesh with corner IOs\
+    \ and AlexNet workload, a **stage-aware, network-optimized** mapping strategy\
+    \ would significantly outperform the current implementation."
+  function_name: stage_aware_network_mapper
+  improvement_pct:
+    comm_latency: 23.85977597659838
+    compute_latency: -4325.367156208277
+    total_latency: 23.250291810201805
+  iteration: 1
+  metrics:
+    comm_latency: 81377.24
+    compute_latency: 662.92
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_imc_heavy_stage_aware_network_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 81377.24
+        compute_latency: 662.92
+        total_latency: 82040.15
+    results_label: alexnet_hetero_imc_heavy_stage_aware_network_mapper
+    total_latency: 82040.15
+  outcome: IMPROVED
+- function_name: optimized_alexnet_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on your previous optimization attempts and analysis, here's\
+    \ a focused improvement strategy targeting the most critical weaknesses in the\
+    \ `_nearest_neighbor_mapper_v3` for this specific 10x10 mesh configuration with\
+    \ 96 compute chiplets and 4 corner IOs:\n\n## **Optimization Strategy: Stage-Aware\
+    \ Contiguous Mapping with IO Proximity**\n\n### **Core Problem to Solve**\nThe\
+    \ current mapper treats each layer independently and creates fragmented mappings\
+    \ that ignore:\n1. **Network topology structure** (corner IOs vs. interior chiplets)\n\
+    2. **Layer grouping opportunities** (AlexNet has clear conv/fc stages)\n3. **Contiguity\
+    \ benefits** (scattered partitions increase communication overhead)\n\n### **Specific\
+    \ Implementation Changes**\n\n#### **1. Add Stage Detection & Grouping**\n```python\n\
+    def _detect_alexnet_stages(self, model_metrics):\n    \"\"\"Identify natural stage\
+    \ boundaries in AlexNet workload\"\"\"\n    stages = []\n    current_stage = []\n\
+    \    \n    for layer_info in model_metrics:\n        layer_type = layer_info['layer_type']\n\
+    \        \n        # AlexNet pattern: conv layers -> fc layers transition\n  \
+    \      if layer_type == 'fc' and all(l['layer_type'] != 'fc' for l in current_stage):\n\
+    \            if current_stage:\n                stages.append(current_stage)\n\
+    \                current_stage = []\n        \n        current_stage.append(layer_info)\n\
+    \    \n    if current_stage:\n        stages.append(current_stage)\n    \n   \
+    \ return stages\n```\n\n#### **2. Modify Nearest-Neighbor for Contiguous Allocation**\n\
+    Replace the percentage-based scattering with **contiguous block allocation**:\n\
+    \n```python\ndef _allocate_contiguous_block(self, chiplet_id, remaining_capacity,\
+    \ \n                               units_needed_full, resources_remaining, \n\
+    \                               crossbars_required, num_chiplets):\n    \"\"\"\
+    \n    Try to allocate complete layers or large contiguous blocks to single chiplets\n\
+    \    before falling back to nearest-neighbor scattering\n    \"\"\"\n    # First\
+    \ pass: Try to fit entire remaining resources on this chiplet\n    chiplet_idx\
+    \ = chiplet_id - 1\n    available_units = remaining_capacity[chiplet_idx]\n  \
+    \  \n    if crossbars_required > 0:\n        units_needed_for_all = math.ceil(resources_remaining\
+    \ * units_needed_full / crossbars_required)\n    else:\n        units_needed_for_all\
+    \ = 0\n    \n    # If this chiplet can take ALL remaining resources, allocate\
+    \ 100% here\n    if available_units >= units_needed_for_all and units_needed_for_all\
+    \ > 0:\n        remaining_capacity[chiplet_idx] -= units_needed_for_all\n    \
+    \    return 100, 0, 0, remaining_capacity\n    \n    # Otherwise, try to allocate\
+    \ at least 50% to maintain contiguity\n    min_contiguous_percentage = 50\n  \
+    \  units_needed_min = math.ceil(units_needed_for_all * min_contiguous_percentage\
+    \ / 100)\n    \n    if available_units >= units_needed_min and units_needed_min\
+    \ > 0:\n        alloc_percentage = min_contiguous_percentage\n        remaining_capacity[chiplet_idx]\
+    \ -= units_needed_min\n        remaining_resources = resources_remaining - math.ceil(alloc_percentage\
+    \ * crossbars_required / 100)\n        remaining_percentage = 100 - alloc_percentage\n\
+    \        return alloc_percentage, remaining_resources, remaining_percentage, remaining_capacity\n\
+    \    \n    # Fall back to whatever is available\n    if units_needed_full > 0:\n\
+    \        alloc_percentage = min(available_units * 100 / units_needed_full, 100)\n\
+    \    else:\n        alloc_percentage = 0\n    \n    if alloc_percentage > 0:\n\
+    \        units_used = math.ceil(units_needed_full * alloc_percentage / 100)\n\
+    \        remaining_capacity[chiplet_idx] -= units_used\n        remaining_resources\
+    \ = resources_remaining - math.ceil(alloc_percentage * crossbars_required / 100)\n\
+    \        remaining_percentage = 100 - alloc_percentage\n        return alloc_percentage,\
+    \ remaining_resources, remaining_percentage, remaining_capacity\n    \n    return\
+    \ 0, resources_remaining, 100, remaining_capacity\n```\n\n#### **3. Intelligent\
+    \ Starting Point Selection Based on Stage**\nModify the starting chiplet selection\
+    \ to consider **stage position in network**:\n\n```python\ndef _get_stage_aware_starting_chiplet(self,\
+    \ stage_index, total_stages, \n                                      available_chiplet_ids,\
+    \ chiplet_network):\n    \"\"\"\n    Select starting chiplet based on stage position:\n\
+    \    - Early stages: Near input IOs (corners)\n    - Middle stages: Central region\n\
+    \    - Late stages: Near output IOs\n    \"\"\"\n    # Calculate stage position\
+    \ (0.0 = beginning, 1.0 = end)\n    stage_position = stage_index / max(total_stages\
+    \ - 1, 1)\n    \n    # Get corner IO positions (from 10x10 mesh)\n    corner_chiplets\
+    \ = [1, 10, 91, 100]  # Assuming 1-based indexing\n    \n    if stage_position\
+    \ < 0.33:\n        # Early stage: prefer near input IOs\n        return self._find_nearest_to_corners(available_chiplet_ids,\
+    \ corner_chiplets[:2], chiplet_network)\n    elif stage_position > 0.66:\n   \
+    \     # Late stage: prefer near output IOs  \n        return self._find_nearest_to_corners(available_chiplet_ids,\
+    \ corner_chiplets[2:], chiplet_network)\n    else:\n        # Middle stage: prefer\
+    \ central chiplets\n        return self._find_central_chiplet(available_chiplet_ids,\
+    \ chiplet_network)\n\ndef _find_nearest_to_corners(self, available_chiplet_ids,\
+    \ corner_chiplets, chiplet_network):\n    \"\"\"Find available chiplet closest\
+    \ to specified corners\"\"\"\n    min_avg_distance = float('inf')\n    best_chiplet\
+    \ = available_chiplet_ids[0]\n    \n    for chiplet_id in available_chiplet_ids:\n\
+    \        total_distance = 0\n        for corner in corner_chiplets:\n        \
+    \    total_distance += nx.shortest_path_length(chiplet_network, chiplet_id, corner)\n\
+    \        \n        avg_distance = total_distance / len(corner_chiplets)\n    \
+    \    if avg_distance < min_avg_distance:\n            min_avg_distance = avg_distance\n\
+    \            best_chiplet = chiplet_id\n    \n    return best_chiplet\n\ndef _find_central_chiplet(self,\
+    \ available_chiplet_ids, chiplet_network):\n    \"\"\"Find most central available\
+    \ chiplet (min distance to all others)\"\"\"\n    min_total_distance = float('inf')\n\
+    \    best_chiplet = available_chiplet_ids[0]\n    \n    for chiplet_id in available_chiplet_ids:\n\
+    \        total_distance = sum(\n            nx.shortest_path_length(chiplet_network,\
+    \ chiplet_id, other)\n            for other in available_chiplet_ids\n       \
+    \ )\n        \n        if total_distance < min_total_distance:\n            min_total_distance\
+    \ = total_distance\n            best_chiplet = chiplet_id\n    \n    return best_chiplet\n\
+    ```\n\n#### **4. Post-Mapping Consolidation Pass**\nAdd a pass to consolidate\
+    \ fragmented mappings:\n\n```python\ndef _consolidate_mappings(self, layer_mappings,\
+    \ remaining_capacity):\n    \"\"\"\n    Try to consolidate highly fragmented mappings\
+    \ by migrating\n    small percentages to adjacent chiplets with more capacity\n\
+    \    \"\"\"\n    for layer_idx, mapping in enumerate(layer_mappings):\n      \
+    \  # Find chips with small percentages (<20%)\n        small_chips = [(chip_id,\
+    \ pct) for chip_id, pct in mapping[1] if 0 < pct < 20]\n        large_chips =\
+    \ [(chip_id, pct) for chip_id, pct in mapping[1] if pct >= 20]\n        \n   \
+    \     if not small_chips or not large_chips:\n            continue\n         \
+    \   \n        # Try to migrate each small allocation to nearest large chip\n \
+    \       for small_chip_id, small_pct in small_chips:\n            # Find nearest\
+    \ large chip with enough capacity\n            for large_chip_id, large_pct in\
+    \ large_chips:\n                if self._can_migrate_percentage(small_chip_id,\
+    \ large_chip_id, \n                                               small_pct, remaining_capacity):\n\
+    \                    # Perform migration\n                    self._migrate_percentage(layer_mappings,\
+    \ layer_idx, \n                                           small_chip_id, large_chip_id,\
+    \ \n                                           small_pct, remaining_capacity)\n\
+    \                    break\n```\n\n### **Why This Approach is Different from Previous\
+    \ Attempts**\n\n1. **Stage Awareness**: Previous optimizations treated all layers\
+    \ equally. This approach recognizes AlexNet's natural conv\u2192fc transition.\n\
+    \n2. **Contiguity Over Scattering**: Instead of accepting fragmented mappings,\
+    \ this actively tries to allocate larger contiguous blocks.\n\n3. **Topology Exploitation**:\
+    \ Explicitly uses the 10x10 mesh structure with corner IOs by placing stages strategically.\n\
+    \n4. **Two-Phase Process**: Initial mapping + consolidation pass, rather than\
+    \ one-pass greedy allocation.\n\n### **Expected Benefits for This Configuration**\n\
+    \n1. **Reduced Cross-Chiplet Communication**: Contiguous allocation minimizes\
+    \ data movement between layer partitions.\n\n2. **Better IO Utilization**: Early/late\
+    \ layers placed near appropriate IOs reduce data movement to/from memory.\n\n\
+    3. **Improved Load Balance**: Centralized middle stages avoid edge congestion.\n\
+    \n4. **Lower Network Contention**: Reduced scattering means fewer small packets\
+    \ clogging the mesh.\n\n### **Implementation Priority**\n1. First implement **contiguous\
+    \ block allocation** (most impactful)\n2. Add **stage detection** for AlexNet\n\
+    3. Implement **IO-aware starting points**\n4. Add **consolidation pass** as final\
+    \ optimization\n\nThis strategy directly addresses the key weaknesses identified:\
+    \ topology agnosticism, fragmentation, and ignoring workload structure. The changes\
+    \ are surgical modifications to the existing mapper rather than a complete rewrite,\
+    \ making them practical to implement."
+  function_name: optimized_alexnet_mapper
+  improvement_pct:
+    comm_latency: -3.742580802146321e-05
+    compute_latency: 0.0
+    total_latency: -3.7420559654029294e-05
+  iteration: 2
+  metrics:
+    comm_latency: 106878.16
+    compute_latency: 14.98
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_imc_heavy_optimized_alexnet_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 106878.16
+        compute_latency: 14.98
+        total_latency: 106893.15
+    results_label: alexnet_hetero_imc_heavy_optimized_alexnet_mapper
+    total_latency: 106893.15
+  outcome: NO_IMPROVEMENT
+- function_name: optimized_alexnet_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Looking at the failed optimization attempts, I can see that previous\
+    \ attempts focused on stage-aware mapping and contiguity, but actually worsened\
+    \ latency (106,893 vs 82,040). This suggests the approach either increased fragmentation\
+    \ or created communication bottlenecks. Let me analyze why and propose a fundamentally\
+    \ different strategy.\n\n## **Analysis of Previous Failures**\n\n**Why stage-aware\
+    \ mapping failed:**\n1. **Forced spatial separation** - Placing stages in different\
+    \ regions likely increased activation movement between stages\n2. **Ignored activation\
+    \ sizes** - AlexNet conv layers produce massive activations (e.g., first conv:\
+    \ 224\xD7224\xD764 \u2248 3.2M values) while FC layers have smaller activations\n\
+    3. **Network hotspots** - Concentrating layers in specific regions (corners/center)\
+    \ created contention points\n\n**The real problem**: The mapper focuses on **layer\
+    \ proximity** but ignores **activation data movement costs**.\n\n## **NEW Optimization\
+    \ Strategy: Activation-Aware Co-placement**\n\nInstead of separating stages by\
+    \ network location, we should **co-locate layers with high activation transfer**\
+    \ and use a **cost model based on actual data movement**.\n\n### **1. Core Insight**\n\
+    For AlexNet (from your workload file):\n- **Conv1\u2192Conv2**: 55.4M activations\
+    \ (55MB with 8-bit)\n- **Conv5\u2192FC6**: 432K activations (0.4MB)\n- **Early\
+    \ conv layers** have 100-1000\xD7 more activation data than late FC layers\n\n\
+    **Current mapper's flaw**: It minimizes distance between consecutive layers regardless\
+    \ of activation size. This wastes optimization effort on tiny data movements while\
+    \ neglecting massive ones.\n\n### **2. Specific Implementation Changes**\n\n####\
+    \ **A. Add Activation-Aware Cost Function**\n```python\ndef _activation_aware_nearest_neighbor(self,\
+    \ model_layer_info, system, preference, \n                                   \
+    \   current_available_capacity, layer_mappings=None, \n                      \
+    \                shortest_paths=None, activation_sizes=None):\n    \"\"\"\n  \
+    \  Modified nearest neighbor that weights distance by activation size\n    \"\"\
+    \"\n    # Get activation size to next layer (if available)\n    next_activation_size\
+    \ = 0\n    if activation_sizes and len(layer_mappings) < len(activation_sizes):\n\
+    \        next_activation_size = activation_sizes[len(layer_mappings)]  # Size\
+    \ from current to next layer\n    \n    # Normal nearest neighbor logic until\
+    \ starting chiplet selection...\n    \n    # MODIFIED: Weight distances by activation\
+    \ size importance\n    chiplet_info = []\n    for chiplet_id in available_chiplet_ids:\n\
+    \        idx = chiplet_id - 1\n        raw_distance = distances.get(chiplet_id,\
+    \ math.inf)\n        \n        # Weight distance by activation importance\n  \
+    \      # If moving huge activations, distance matters more\n        activation_weight\
+    \ = min(1.0, next_activation_size / (10 * 1024 * 1024))  # Scale: 10MB = max weight\n\
+    \        weighted_distance = raw_distance * (1 + activation_weight)\n        \n\
+    \        metric_value = chiplet_network.nodes[chiplet_id].get(active_metric, 0)\n\
+    \        chiplet_info.append((chiplet_id, weighted_distance, avail_memory_list[idx],\
+    \ metric_value))\n    \n    # Sort by weighted distance first\n    chiplet_info.sort(key=lambda\
+    \ x: (x[1], -x[2], -x[3]))\n```\n\n#### **B. Implement Lookahead for Critical\
+    \ Pairs**\n```python\ndef _find_critical_layer_pairs(self, model_metrics, activation_sizes):\n\
+    \    \"\"\"\n    Identify layer pairs with largest activation transfers\n    Returns:\
+    \ List of (prev_layer_idx, curr_layer_idx, activation_size) sorted by size\n \
+    \   \"\"\"\n    critical_pairs = []\n    for i in range(len(model_metrics) - 1):\n\
+    \        if i < len(activation_sizes):\n            size = activation_sizes[i]\n\
+    \            critical_pairs.append((i, i+1, size))\n    \n    # Sort by activation\
+    \ size descending\n    critical_pairs.sort(key=lambda x: x[2], reverse=True)\n\
+    \    return critical_pairs\n\ndef _pre_place_critical_pairs(self, critical_pairs,\
+    \ model_metrics, remaining_capacity):\n    \"\"\"\n    Pre-place the most critical\
+    \ layer pairs to minimize large data movements\n    \"\"\"\n    placed_layers\
+    \ = set()\n    placement_map = {}  # layer_idx -> chiplet_id\n    \n    for prev_idx,\
+    \ curr_idx, act_size in critical_pairs[:3]:  # Top 3 most critical\n        if\
+    \ prev_idx in placed_layers and curr_idx not in placed_layers:\n            #\
+    \ Place current layer near already-placed previous layer\n            prev_chiplet\
+    \ = placement_map[prev_idx]\n            self._place_layer_near_chiplet(curr_idx,\
+    \ prev_chiplet, remaining_capacity)\n            placed_layers.add(curr_idx)\n\
+    \            placement_map[curr_idx] = prev_chiplet\n        elif prev_idx not\
+    \ in placed_layers:\n            # Place both layers together\n            best_pair\
+    \ = self._find_best_pair_location(prev_idx, curr_idx, remaining_capacity)\n  \
+    \          placed_layers.update([prev_idx, curr_idx])\n            placement_map.update({prev_idx:\
+    \ best_pair, curr_idx: best_pair})\n    \n    return placement_map\n```\n\n####\
+    \ **C. Dynamic Chiplet Capacity Reservation**\n```python\ndef _reserve_for_large_activations(self,\
+    \ layer_idx, activation_sizes, remaining_capacity):\n    \"\"\"\n    Reserve capacity\
+    \ on neighboring chiplets for layers that will need to \n    send large activations\
+    \ to subsequent layers\n    \"\"\"\n    if layer_idx >= len(activation_sizes):\n\
+    \        return remaining_capacity\n    \n    act_size = activation_sizes[layer_idx]\n\
+    \    \n    # Only reserve for very large activations (>5MB)\n    if act_size >\
+    \ 5 * 1024 * 1024:  # 5MB\n        print(f\"\u26A0\uFE0F Large activation detected:\
+    \ {act_size/1024/1024:.1f}MB after layer {layer_idx}\")\n        \n        # For\
+    \ current layer placement, reserve capacity on neighboring chiplets\n        #\
+    \ for potential next-layer placement\n        for chiplet_idx, capacity in enumerate(remaining_capacity):\n\
+    \            if capacity > 0:\n                # Reserve 20% of capacity on this\
+    \ chiplet for future layers\n                reserve_amount = int(capacity * 0.2)\n\
+    \                remaining_capacity[chiplet_idx] -= reserve_amount\n         \
+    \       \n    return remaining_capacity\n```\n\n#### **D. Reverse-Order Mapping\
+    \ for FC Layers**\n```python\ndef _reverse_map_fc_layers(self, model_metrics,\
+    \ remaining_capacity):\n    \"\"\"\n    Map FC layers in reverse order (output\
+    \ to input) to minimize \n    activation movement through the network\n    \"\"\
+    \"\n    # Identify FC layers\n    fc_indices = [i for i, layer in enumerate(model_metrics)\
+    \ \n                  if layer['layer_type'] == 'fc']\n    \n    if not fc_indices:\n\
+    \        return remaining_capacity\n    \n    # Map from last FC to first\n  \
+    \  for fc_idx in reversed(fc_indices):\n        # Find chiplets near the network\
+    \ output (corner IOs for final output)\n        output_corners = [91, 100]  #\
+    \ Bottom-right corners\n        nearest_to_output = self._find_nearest_available(output_corners,\
+    \ remaining_capacity)\n        \n        # Place this FC layer near output\n \
+    \       if nearest_to_output:\n            # Calculate requirements and allocate\n\
+    \            layer_info = model_metrics[fc_idx]\n            units_needed = self._calculate_layer_requirements(layer_info,\
+    \ \n                                                             self.system.chiplets[nearest_to_output-1])\n\
+    \            \n            if remaining_capacity[nearest_to_output-1] >= units_needed:\n\
+    \                remaining_capacity[nearest_to_output-1] -= units_needed\n   \
+    \ \n    return remaining_capacity\n```\n\n### **3. Why This Strategy Will Work\
+    \ Better**\n\n**Key differences from previous attempts:**\n\n1. **Data-Driven\
+    \ Optimization**: Uses actual activation sizes (from workload file) rather than\
+    \ assumptions about layer types\n2. **Selective Optimization**: Focuses effort\
+    \ where it matters most (large activations), ignoring tiny data movements\n3.\
+    \ **Preserves Locality**: Still uses nearest-neighbor but weights it by actual\
+    \ communication cost\n4. **Adaptive to Workload**: Works for any DNN, not just\
+    \ AlexNet-specific patterns\n\n### **4. Implementation Priority**\n\n1. **First**:\
+    \ Parse activation sizes from workload file and pass to mapper\n2. **Second**:\
+    \ Implement weighted distance calculation (minimal change to existing algorithm)\n\
+    3. **Third**: Add reverse-order FC mapping\n4. **Fourth**: (Optional) Add critical\
+    \ pair pre-placement\n\n### **5. Expected Benefits**\n\n1. **Reduced Massive Data\
+    \ Movement**: 55MB activations won't travel across the entire mesh\n2. **Better\
+    \ Network Utilization**: Small activations can travel farther without penalty\n\
+    3. **Maintains Simplicity**: Keeps the nearest-neighbor foundation but makes it\
+    \ data-aware\n4. **No Stage Separation**: Layers stay naturally clustered by data\
+    \ dependency, not artificial boundaries\n\n### **6. Required Data from Workload**\n\
+    \nThe workload file (`workload_alexnet.csv`) should contain or be augmented with:\n\
+    - Activation sizes between layers\n- Or calculated from: output dimensions \xD7\
+    \ bit-width\n\n**Quick estimation for AlexNet:**\n- Conv1\u2192Conv2: 55.4M values\
+    \ \xD7 8-bit = 443Mb = 55MB\n- Conv2\u2192Conv3: 14.7M \xD7 8-bit = 14.7MB  \n\
+    - Conv5\u2192FC6: 432K \xD7 8-bit = 0.43MB\n\nThis optimization strategy directly\
+    \ targets the **real performance bottleneck** (large activation movement) that\
+    \ the current mapper completely ignores, explaining why previous topology-focused\
+    \ optimizations failed."
+  function_name: optimized_alexnet_mapper
+  improvement_pct:
+    comm_latency: 0.0
+    compute_latency: 0.0
+    total_latency: 0.0
+  iteration: 3
+  metrics:
+    comm_latency: 106878.12
+    compute_latency: 14.98
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_imc_heavy_optimized_alexnet_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 106878.12
+        compute_latency: 14.98
+        total_latency: 106893.11
+    results_label: alexnet_hetero_imc_heavy_optimized_alexnet_mapper
+    total_latency: 106893.11
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3
