@@ -1,0 +1,423 @@
+baseline_metrics:
+  comm_latency: 296748.93
+  compute_latency: 14437.44
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_center_imc/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 311186.37
+best_metrics:
+  comm_latency: 186111.4
+  compute_latency: 14745.72
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_center_imc_flow_pipeline_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: vgg16_hetero_center_imc_flow_pipeline_mapper
+  total_latency: 200857.12
+config: vgg16_hetero_center_imc
+history:
+- error: Simulation timed out after 900 seconds.
+  function_name: improved_nearest_neighbor_mapper
+  iteration: 1
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- error: Simulation timed out after 900 seconds.
+  function_name: improved_cluster_mapper
+  iteration: 1
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 2
+- function_name: topology_aware_clustering_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 3
+- change_summary: "**Analysis of Nearest-Neighbor Mapper Weaknesses for Given CHIPSIM\
+    \ Configuration**\n\n---\n\n### **1. Key Weaknesses of Current Nearest-Neighbor\
+    \ Approach**\nThe algorithm prioritizes proximity and local memory availability,\
+    \ but overlooks critical factors for efficient mapping on a 96-chiplet mesh with\
+    \ 4 I/O corner chiplets:\n\n**A. Network Congestion & Communication Overhead**\n\
+    - **Shortest-path-only evaluation**: The mapper uses Manhattan distance (`shortest_paths`)\
+    \ but ignores **link contention**, **bandwidth bottlenecks**, and **network topology\
+    \ asymmetry**. On a 10\xD710 mesh with I/O chiplets only at corners, data movement\
+    \ to/from edge chiplets will experience higher latency and congestion\u2014this\
+    \ isn\u2019t captured.\n- **No traffic modeling**: The mapper doesn\u2019t simulate\
+    \ or estimate inter-layer communication (e.g., activations from one layer to the\
+    \ next). Placing consecutive layers on nearby chiplets reduces hop count but may\
+    \ overload specific routers if many layers map to the same region.\n\n**B. Load\
+    \ Balancing & Resource Fragmentation**\n- **Memory occupancy bias**: The algorithm\
+    \ sorts chiplets by `(distance, -avail_memory, -metric_value)`. This means a chiplet\
+    \ with slightly more free memory will be chosen even if it\u2019s far from the\
+    \ previous layer\u2019s placement. For large layers, this can cause **spatial\
+    \ fragmentation**\u2014spreading a layer across distant chiplets increases communication\
+    \ costs.\n- **No look-ahead**: The mapper processes layers sequentially without\
+    \ considering future layers\u2019 sizes or dependencies. This can lead to **suboptimal\
+    \ cluster formation**, where early layers consume central chiplets, forcing later\
+    \ layers to map to edges, increasing average distance.\n\n**C. Heterogeneity Ignorance**\n\
+    | Chiplet Type       | Count | Placement       | Weight Capacity |\n|--------------------|-------|----------------|----------------|\n\
+    | CMOS Compute       | 96    | Mesh interior  | 2.46M weights each |\n| I/O (corners)\
+    \      | 4     | Corners        | (excluded from mapping) |\n\n- **Uniform treatment**:\
+    \ All 96 CMOS chiplets are considered identical in `_calculate_layer_requirements`.\
+    \ However, in a real heterogeneous system, chiplets may have varying **memory\
+    \ bandwidth**, **computational throughput**, or **thermal limits**. The mapper\u2019\
+    s \u201Cdistance + memory\u201D heuristic doesn\u2019t account for performance\
+    \ variance.\n- **I/O proximity penalty**: The 4 I/O chiplets are excluded, but\
+    \ data must flow to them for off-chip communication. Mapping compute layers far\
+    \ from I/O chiplets (e.g., center of mesh) increases latency for loading weights\
+    \ or sending final outputs off-chip.\n\n**D. Algorithmic Inefficiencies**\n- **Linear\
+    \ greedy allocation**: For each layer, the mapper iterates over chiplets sorted\
+    \ by distance and allocates percentage based on local capacity. This can create\
+    \ **unbalanced splits**: a layer might be split across 10+ chiplets because the\
+    \ nearest chiplet only had partial capacity, increasing synchronization overhead.\n\
+    - **Rounding errors**: The partitioner (`layer_partitioner.py`) adjusts partitions\
+    \ post-mapping, but the mapper\u2019s percentage allocation (`alloc_percentage\
+    \ = available_units * 100 / units_needed_full`) can produce uneven splits that\
+    \ complicate load balancing.\n\n---\n\n### **2. Specific Opportunities for Improvement**\n\
+    Given the 10\xD710 mesh topology and workload (`workload_vgg16.csv`), the following\
+    \ enhancements are high-priority:\n\n**A. Topology-Aware Clustering**\n| Strategy\
+    \                     | Benefit                                              \
+    \                   |\n|------------------------------|-------------------------------------------------------------------------|\n\
+    | **Quadrant-based mapping**   | Assign layers to one of 4 quadrants (each anchored\
+    \ by a corner I/O chiplet). Reduces average distance to I/O. |\n| **Contiguous\
+    \ block selection**| Instead of nearest-neighbor, pick a contiguous rectangular\
+    \ block of chiplets with sufficient aggregate capacity. Minimizes intra-layer\
+    \ communication hops. |\n| **I/O-aware seeding**        | Start first layer near\
+    \ an I/O chiplet (not necessarily center). Use `preferred_start_chiplet_id` to\
+    \ bias initial placement toward corners. |\n\n**B. Communication-Aware Cost Function**\n\
+    Replace `(distance, -avail_memory, -metric_value)` with a cost that estimates:\n\
+    - **Inter-layer traffic**: If previous layer\u2019s output activations are large,\
+    \ favor chiplets with high bandwidth links or low congestion paths.\n- **Data\
+    \ reuse**: If a layer reuses weights from a prior layer, map to the same chiplets\
+    \ to avoid weight reloading.\n- **Network hotspot avoidance**: Prefer paths that\
+    \ avoid already heavily used links (requires tracking link utilization during\
+    \ mapping).\n\n**C. Batch Optimization**\n- **Layer grouping**: Process multiple\
+    \ layers together (e.g., all layers of a VGG16 block) to find a placement minimizing\
+    \ total communication.\n- **Backtracking**: If a layer cannot fit near its predecessor,\
+    \ consider remapping the predecessor to a more flexible location (requires temporary\
+    \ undo).\n\n**D. Heterogeneity Utilization**\n- **Performance/energy trade-off**:\
+    \ The `preference` dict (`{\"performance\": 1, \"energy_efficiency\": 0}`) is\
+    \ used only as a tertiary sorting metric. Instead, integrate it into the cost\
+    \ function: e.g., weigh distance vs. chiplet-specific power efficiency.\n- **Thermal\
+    \ awareness**: Avoid concentrating layers in a dense region (creates hotspot).\
+    \ Spread compute across mesh to balance thermal load.\n\n---\n\n### **3. Missing\
+    \ Data/Signals the Mapper Should Use**\nThe mapper currently ignores:\n\n| Missing\
+    \ Signal                     | How to Incorporate                            \
+    \                                     |\n|------------------------------------|------------------------------------------------------------------------------------|\n\
+    | **Inter-layer data volume**        | From `model_metrics`, obtain activation\
+    \ sizes between layers. Use to weight distance cost. |\n| **Network link capacity**\
+    \          | Mesh links have finite bandwidth (implied by `bits_per_packet: 128`\
+    \ and `network_operation_frequency_hz: 1e9`). Model per-link utilization and penalize\
+    \ overloaded paths. |\n| **Chiplet compute throughput**    | CMOS chiplets may\
+    \ have different MAC/cycle rates. Use to adjust allocation percentages (faster\
+    \ chiplets get larger shares). |\n| **Spatial locality**               | The mapper\
+    \ splits layers across arbitrary chiplets. Enforce **maximum split radius**\u2014\
+    limit allocation to chiplets within N hops of the primary chiplet. |\n| **Workload\
+    \ concurrency**           | If multiple models run simultaneously, track residual\
+    \ capacity across runs to avoid fragmenting capacity. |\n\n**Immediate Improvements\
+    \ for `_nearest_neighbor_mapper_v3`:**\n1. **Add a \u201Ccluster radius\u201D\
+    \ parameter**: Restrict allocation to chiplets within `max_hops` of the starting\
+    \ chiplet.\n2. **Weight inter-layer communication**: Multiply distance by activation\
+    \ size (if available) to prioritize low-traffic placements.\n3. **Batch allocation**:\
+    \ For large layers, allocate to the nearest **set** of chiplets with sufficient\
+    \ contiguous capacity, rather than iterating one-by-one.\n4. **I/O anchor bias**:\
+    \ Modify `starting_chiplet` selection to prefer chiplets adjacent to I/O corners\
+    \ when `preference[\"energy_efficiency\"] > 0`.\n\n**Conclusion**: The current\
+    \ nearest-neighbor mapper is reasonable for small-scale homogeneous meshes but\
+    \ lacks the sophistication needed for large-scale heterogeneous systems with deep\
+    \ neural networks (VGG16). Incorporating **communication volume**, **topology\
+    \ constraints**, and **batch optimization** would significantly improve mapping\
+    \ efficiency."
+  function_name: topology_aware_clustering_mapper
+  improvement_pct:
+    comm_latency: 0.0
+    compute_latency: 0.0
+    total_latency: 0.0
+  iteration: 1
+  metrics:
+    comm_latency: 296748.93
+    compute_latency: 14437.44
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_center_imc_topology_aware_clustering_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 296748.93
+        compute_latency: 14437.44
+        total_latency: 311186.37
+    results_label: vgg16_hetero_center_imc_topology_aware_clustering_mapper
+    total_latency: 311186.37
+  outcome: NO_IMPROVEMENT
+- function_name: hierarchical_topology_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Given the configuration and previous optimization attempts that\
+    \ resulted in runtime errors or no improvement, I'll propose a different strategy\
+    \ focused on **communication-aware mapping with topological awareness**.\n\n##\
+    \ **Improved Mapping Strategy: Topology-Aware Hierarchical Mapping**\n\n### **Core\
+    \ Enhancement: 2-Level Hierarchical Approach**\n\n```python\ndef _hierarchical_topology_mapper(self,\
+    \ model_layer_info, system, preference, \n                                  current_available_crossbars,\
+    \ layer_mappings=None, \n                                  shortest_paths=None):\n\
+    \    \"\"\"\n    Enhanced mapper that considers mesh topology hierarchy and communication\
+    \ patterns.\n    Groups chiplets into clusters and maps layers to minimize inter-cluster\
+    \ traffic.\n    \"\"\"\n    # 1. Define topology-aware clusters (4 clusters around\
+    \ corner I/O chiplets)\n    clusters = self._define_topology_clusters()\n    \n\
+    \    # 2. For each layer, evaluate best cluster based on:\n    #    - Communication\
+    \ with previous layer (if any)\n    #    - Available capacity within cluster\n\
+    \    #    - Distance to I/O chiplets (for first/last layers)\n    \n    # 3. Within\
+    \ selected cluster, use modified nearest-neighbor with capacity contiguity\n \
+    \   \n    # Implementation details below...\n```\n\n### **Key Algorithm Improvements:**\n\
+    \n#### **1. Topology-Clustered Resource Allocation**\n```python\ndef _define_topology_clusters(self):\n\
+    \    \"\"\"Group chiplets into 4 quadrants around corner I/O chiplets.\"\"\"\n\
+    \    clusters = {\n        'NW': [],  # Near I/O chiplet at (0,0)\n        'NE':\
+    \ [],  # Near I/O chiplet at (0,9)\n        'SW': [],  # Near I/O chiplet at (9,0)\n\
+    \        'SE': [],  # Near I/O chiplet at (9,9)\n    }\n    \n    # Assign each\
+    \ compute chiplet to nearest corner I/O chiplet\n    for idx in self.compute_chiplet_indices:\n\
+    \        chiplet_id = idx + 1\n        pos = self.system.get_chiplet_position(chiplet_id)\n\
+    \        \n        # Calculate Manhattan distance to each corner\n        distances\
+    \ = {\n            'NW': pos[0] + pos[1],  # Distance to (0,0)\n            'NE':\
+    \ pos[0] + (9 - pos[1]),  # Distance to (0,9)\n            'SW': (9 - pos[0])\
+    \ + pos[1],  # Distance to (9,0)\n            'SE': (9 - pos[0]) + (9 - pos[1])\
+    \  # Distance to (9,9)\n        }\n        \n        # Assign to closest corner\
+    \ cluster\n        closest = min(distances, key=distances.get)\n        clusters[closest].append(chiplet_id)\n\
+    \    \n    return clusters\n```\n\n#### **2. Communication-Aware Cluster Selection**\n\
+    ```python\ndef _select_best_cluster(self, layer_info, previous_layer_chiplets,\
+    \ clusters):\n    \"\"\"\n    Select the best cluster for current layer based\
+    \ on:\n    1. Communication cost with previous layer\n    2. Available capacity\
+    \ in cluster\n    3. I/O proximity for input/output layers\n    \"\"\"\n    layer_name\
+    \ = layer_info['name']\n    layer_type = layer_info['layer_type']\n    \n    #\
+    \ Score each cluster\n    cluster_scores = {}\n    \n    for cluster_name, chiplets\
+    \ in clusters.items():\n        score = 0\n        \n        # Factor 1: Communication\
+    \ with previous layer\n        if previous_layer_chiplets:\n            avg_distance\
+    \ = self._avg_distance_to_cluster(previous_layer_chiplets, chiplets)\n       \
+    \     # Weight by activation size if available\n            activation_size =\
+    \ layer_info.get('activation_size', 1)\n            score -= avg_distance * activation_size\
+    \ * 10  # Negative score for distance\n        \n        # Factor 2: Available\
+    \ capacity in cluster\n        total_capacity = sum(self.system.get_available_capacity(c)\
+    \ for c in chiplets)\n        score += total_capacity * 5\n        \n        #\
+    \ Factor 3: I/O proximity for input/output layers\n        if 'input' in layer_name.lower()\
+    \ or layer_type == 'first':\n            # Input layers prefer clusters near I/O\n\
+    \            score += self._io_proximity_bonus(cluster_name)\n        elif 'output'\
+    \ in layer_name.lower() or layer_type == 'last':\n            # Output layers\
+    \ also prefer I/O proximity\n            score += self._io_proximity_bonus(cluster_name)\n\
+    \        \n        cluster_scores[cluster_name] = score\n    \n    # Return best\
+    \ scoring cluster\n    return max(cluster_scores.items(), key=lambda x: x[1])[0]\n\
+    ```\n\n#### **3. Contiguous Allocation Within Cluster**\n```python\ndef _allocate_within_cluster(self,\
+    \ chiplets, layer_info, current_available_crossbars):\n    \"\"\"\n    Allocate\
+    \ layer within a cluster, preferring contiguous chiplets\n    to minimize intra-layer\
+    \ communication.\n    \"\"\"\n    # Sort chiplets by position to find contiguous\
+    \ blocks\n    positions = {c: self.system.get_chiplet_position(c) for c in chiplets}\n\
+    \    sorted_chiplets = sorted(chiplets, key=lambda c: (positions[c][0], positions[c][1]))\n\
+    \    \n    # Try to find contiguous block with enough capacity\n    required_units\
+    \ = self._calculate_total_required(layer_info)\n    allocated = []\n    \n   \
+    \ # Search for best contiguous block\n    for start_idx in range(len(sorted_chiplets)):\n\
+    \        total_available = 0\n        block = []\n        \n        for i in range(start_idx,\
+    \ len(sorted_chiplets)):\n            chiplet = sorted_chiplets[i]\n         \
+    \   chiplet_idx = chiplet - 1\n            available = current_available_crossbars[chiplet_idx]\n\
+    \            \n            # Check contiguity (adjacent in mesh)\n           \
+    \ if block and not self._are_adjacent(chiplet, block[-1]):\n                break\n\
+    \                \n            block.append(chiplet)\n            total_available\
+    \ += available\n            \n            if total_available >= required_units:\n\
+    \                # Found suitable contiguous block\n                return self._allocate_to_block(block,\
+    \ layer_info, \n                                               current_available_crossbars,\
+    \ \n                                               required_units)\n    \n   \
+    \ # If no contiguous block found, fall back to original nearest-neighbor\n   \
+    \ return self._fallback_allocation(chiplets, layer_info, current_available_crossbars)\n\
+    ```\n\n### **Implementation Strategy:**\n\n1. **Gradual Integration**:\n   - Start\
+    \ with simple cluster-based routing for first/last layers\n   - Add contiguous\
+    \ allocation for large convolutional layers\n   - Maintain original nearest-neighbor\
+    \ as fallback\n\n2. **Configuration Parameters**:\n```yaml\nmapping:\n  strategy:\
+    \ hierarchical_topology\n  parameters:\n    enable_clustering: true\n    cluster_size:\
+    \ 4\n    max_split_distance: 2  # Max hops between chiplets in same layer\n  \
+    \  prefer_contiguous: true\n    io_aware_mapping: true\n```\n\n3. **Performance\
+    \ Monitoring**:\n   - Track average inter-chiplet distance per layer\n   - Monitor\
+    \ cluster load balance\n   - Measure communication vs computation ratio\n\n###\
+    \ **Expected Benefits:**\n\n1. **Reduced Communication**: Layers mapped to contiguous\
+    \ blocks within clusters minimize hop count\n2. **Better Load Balancing**: Clusters\
+    \ prevent overloading center chiplets\n3. **I/O Optimization**: Input/output layers\
+    \ placed near corner I/O chiplets\n4. **Scalability**: Hierarchical approach scales\
+    \ better to large meshes\n\n### **Migration Path**:\n1. First implement cluster\
+    \ selection without changing allocation logic\n2. Add contiguous block finding\
+    \ as an optimization\n3. Integrate communication cost based on activation sizes\n\
+    4. Add fallback mechanisms for edge cases\n\nThis approach addresses the key weaknesses\
+    \ while maintaining backward compatibility and providing clear migration from\
+    \ the current nearest-neighbor mapper."
+  function_name: hierarchical_topology_mapper
+  improvement_pct:
+    comm_latency: -1.2955497430100347
+    compute_latency: -6.348493915818867
+    total_latency: -1.5299802494563066
+  iteration: 2
+  metrics:
+    comm_latency: 300593.46
+    compute_latency: 15354.0
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_center_imc_hierarchical_topology_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 300593.46
+        compute_latency: 15354.0
+        total_latency: 315947.46
+    results_label: vgg16_hetero_center_imc_hierarchical_topology_mapper
+    total_latency: 315947.46
+  outcome: NO_IMPROVEMENT
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/map"
+  function_name: flow_pipeline_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- function_name: flow_pipeline_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 2
+- change_summary: "Based on your analysis and the CHIPSIM configuration, I'll propose\
+    \ a fundamentally different optimization strategy focusing on **communication-aware\
+    \ mapping with topological constraints**.\n\n## **Radical Optimization Strategy:\
+    \ Communication-Centric Mapping**\n\n### **Core Problem Identification**\nThe\
+    \ nearest-neighbor mapper focuses on local resource availability but ignores the\
+    \ **fundamental communication patterns** in DNN workloads:\n1. **Layer-to-layer\
+    \ activation flow** (sequential dependencies)\n2. **Weight stationary vs activation\
+    \ stationary** trade-offs\n3. **I/O bottleneck** at corner chiplets\n\nFor VGG16-like\
+    \ workloads on a 10\xD710 mesh with only corner I/O chiplets, the current approach\
+    \ will create **massive cross-mesh communication** bottlenecks.\n\n### **New Strategy:\
+    \ Flow-Aware Pipeline Mapping**\n\n```python\ndef _flow_pipeline_mapper(self,\
+    \ model_layer_info, system, preference, \n                          current_available_crossbars,\
+    \ layer_mappings=None, \n                          shortest_paths=None):\n   \
+    \ \"\"\"\n    Maps layers along a communication flow path from input to output.\n\
+    \    Creates a pipeline from input I/O chiplet to output I/O chiplet.\n    \"\"\
+    \"\n    mapping_failed = False\n    failure_reason = None\n    \n    # 1. Determine\
+    \ flow direction based on layer type\n    layer_name = model_layer_info['name']\n\
+    \    layer_type = model_layer_info['layer_type']\n    \n    # Identify I/O chiplet\
+    \ anchors\n    io_chiplets = [chiplet_id for chiplet_id in range(1, len(system.chiplets)+1)\
+    \ \n                   if system.is_io_chiplet(chiplet_id)]\n    \n    # 2. Select\
+    \ starting chiplet based on layer position in network\n    if layer_mappings is\
+    \ None:\n        # First layer: start near an input I/O chiplet\n        starting_chiplet\
+    \ = self._select_input_io_anchor(io_chiplets)\n    else:\n        # Subsequent\
+    \ layers: continue from previous layer's endpoint\n        last_layer_endpoint\
+    \ = self._get_last_layer_endpoint(layer_mappings)\n        starting_chiplet =\
+    \ last_layer_endpoint\n    \n    # 3. Create a flow path through the mesh\n  \
+    \  flow_path = self._create_flow_path(starting_chiplet, layer_type, io_chiplets)\n\
+    \    \n    # 4. Allocate along the flow path rather than nearest-neighbor\n  \
+    \  return self._allocate_along_path(flow_path, model_layer_info, \n          \
+    \                           current_available_crossbars, \n                  \
+    \                   system, preference)\n```\n\n### **Key Algorithmic Changes:**\n\
+    \n#### **1. Flow Path Creation**\n```python\ndef _create_flow_path(self, starting_chiplet,\
+    \ layer_type, io_chiplets):\n    \"\"\"\n    Creates an optimal path through the\
+    \ mesh considering:\n    - Input/output layer positions\n    - Activation size\
+    \ between layers\n    - Mesh topology constraints\n    \"\"\"\n    # For early\
+    \ layers (conv1-3): Path from NW I/O to center\n    if layer_type == 'conv' and\
+    \ layer_name.startswith('conv1'):\n        target = self._find_central_cluster()\n\
+    \        return self._manhattan_path(starting_chiplet, target)\n    \n    # For\
+    \ middle layers (conv4-5): Horizontal flow across mesh\n    elif layer_type ==\
+    \ 'conv' and layer_name.startswith('conv4'):\n        # Create eastward flow to\
+    \ balance load\n        return self._horizontal_sweep_path(starting_chiplets)\n\
+    \    \n    # For FC layers: Path to output I/O chiplet\n    elif layer_type ==\
+    \ 'fc':\n        target = self._select_output_io_anchor(io_chiplets)\n       \
+    \ return self._manhattan_path(starting_chiplet, target)\n    \n    # Default:\
+    \ minimal path to nearest I/O for output\n    else:\n        return self._minimal_output_path(starting_chiplet,\
+    \ io_chiplets)\n```\n\n#### **2. Path-Based Allocation**\n```python\ndef _allocate_along_path(self,\
+    \ flow_path, layer_info, current_available_crossbars,\n                      \
+    \   system, preference):\n    \"\"\"\n    Allocate layer resources along a predetermined\
+    \ path rather than nearest-neighbor.\n    This ensures communication happens along\
+    \ efficient routes.\n    \"\"\"\n    chiplets = system.chiplets\n    num_chiplets\
+    \ = len(chiplets)\n    \n    # Treat current_available_crossbars as capacity units\n\
+    \    remaining_capacity = current_available_crossbars.copy()\n    \n    layer_name\
+    \ = layer_info['name']\n    crossbars_required = layer_info['crossbars_required']\n\
+    \    action = [0] * num_chiplets\n    resources_remaining = crossbars_required\n\
+    \    percentage_remaining = 100\n    \n    # Allocate strictly along the flow\
+    \ path\n    for chiplet_id in flow_path:\n        chiplet_idx = chiplet_id - 1\n\
+    \        \n        # Skip I/O chiplets\n        if system.is_io_chiplet(chiplet_id):\n\
+    \            continue\n            \n        available_units = remaining_capacity[chiplet_idx]\n\
+    \        if available_units <= 0:\n            continue\n        \n        units_needed_full\
+    \ = self._calculate_layer_requirements(layer_info, chiplets[chiplet_idx])\n  \
+    \      \n        if crossbars_required > 0:\n            units_needed_for_resources\
+    \ = math.ceil(resources_remaining * units_needed_full / crossbars_required)\n\
+    \        else:\n            units_needed_for_resources = 0\n        \n       \
+    \ if available_units >= units_needed_for_resources:\n            remaining_capacity[chiplet_idx]\
+    \ -= units_needed_for_resources\n            alloc_percentage = percentage_remaining\n\
+    \            percentage_remaining = 0\n            resources_remaining = approximately\
+    \ 0\n        else:\n            alloc_percentage = (available_units * 100 / units_needed_full)\
+    \ if units_needed_full > 0 else 0\n            remaining_capacity[chiplet_idx]\
+    \ = 0\n            percentage_remaining -= alloc_percentage\n            resources_remaining\
+    \ -= math.ceil(alloc_percentage * crossbars_required / 100)\n        \n      \
+    \  action[chiplet_idx] = alloc_percentage\n        \n        if resources_remaining\
+    \ <= 0:\n            break\n    \n    if resources_remaining > 10:  # Threshold\
+    \ for allocation failure\n        mapping_failed = True\n        failure_reason\
+    \ = \"INSUFFICIENT_MEMORY_ON_PATH\"\n        return remaining_capacity, None,\
+    \ mapping_failed, failure_reason\n    \n    return remaining_capacity, action,\
+    \ False, None\n```\n\n#### **3. Communication Cost Integration**\n```python\n\
+    def _evaluate_communication_cost(self, layer_info, source_chiplets, target_chiplets):\n\
+    \    \"\"\"\n    Calculate communication cost between layers based on activation\
+    \ size.\n    \"\"\"\n    activation_size = layer_info.get('activation_size', 0)\n\
+    \    \n    if not source_chiplets or not target_chiplets:\n        return 0\n\
+    \    \n    # Calculate average distance between source and target chiplets\n \
+    \   total_distance = 0\n    for src in source_chiplets:\n        for tgt in target_chiplets:\n\
+    \            total_distance += shortest_paths.get(src, {}).get(tgt, 0)\n    \n\
+    \    avg_distance = total_distance / (len(source_chiplets) * len(target_chiplets))\n\
+    \    \n    # Communication cost = activation_size * average_distance\n    return\
+    \ activation_size * avg_distance\n```\n\n### **Configuration Integration**\n\n\
+    ```yaml\n# Add to CHIPSIM config\nmapping:\n  strategy: flow_pipeline\n  parameters:\n\
+    \    enable_flow_optimization: true\n    flow_direction: \"horizontal_sweep\"\
+    \  # or \"vertical_sweep\", \"diagonal\", \"io_centric\"\n    max_path_length:\
+    \ 6  # Maximum hops in flow path\n    activation_size_weight: 0.7  # How much\
+    \ to weight activation sizes\n```\n\n### **Why This Strategy is Radically Different**\n\
+    \n1. **Breaks Nearest-Neighbor Paradigm**: Instead of spreading layers based on\
+    \ local availability, it **organizes computation along communication flows**.\n\
+    \n2. **Topology-Aware**: Explicitly uses the 10\xD710 mesh topology to create\
+    \ efficient paths:\n   - Early layers near input I/O chiplets\n   - Middle layers\
+    \ flowing across mesh\n   - Final layers near output I/O chiplets\n\n3. **Addresses\
+    \ I/O Bottleneck**: Corner I/O chiplets are bottlenecks. This strategy:\n   -\
+    \ Starts computation near input I/O chiplets\n   - Ends computation near output\
+    \ I/O chiplets\n   - Minimizes cross-mesh traffic for intermediate results\n\n\
+    4. **Predictable Communication Patterns**: Creates **deterministic communication\
+    \ paths** that can be optimized at network level (routing tables, priority queues).\n\
+    \n### **Expected Benefits for VGG16 on 10\xD710 Mesh**\n\n1. **Reduced Hop Count**:\
+    \ Instead of average 5-6 hops for random placement, flow paths reduce to 2-3 hops\
+    \ for most communication.\n\n2. **Balanced Load**: Horizontal sweep paths distribute\
+    \ load across rows rather than concentrating in center.\n\n3. **I/O Efficiency**:\
+    \ Input/output layers placed near corners reduce off-chip communication latency.\n\
+    \n4. **Better Contiguity**: Layers mapped along paths create contiguous blocks\
+    \ that simplify partitioner adjustments.\n\n### **Migration Implementation**\n\
+    \n```python\nclass ModelMapper:\n    def __init__(self, system, mapping_function=\"\
+    flow_pipeline\", preference=None):\n        self.system = system\n        self.mapping_function\
+    \ = mapping_function\n        self.preference = preference or {\"performance\"\
+    : 1, \"energy_efficiency\": 0}\n        \n        # Precompute flow paths for\
+    \ common patterns\n        self.flow_paths = self._precompute_flow_paths()\n \
+    \       \n    def _precompute_flow_paths(self):\n        \"\"\"Precompute optimal\
+    \ flow paths for the 10x10 mesh.\"\"\"\n        paths = {}\n        \n       \
+    \ # Path from NW I/O to center cluster\n        paths['input_to_center'] = self._compute_path_from_io_to_center(1)\
+    \  # NW I/O\n        \n        # Horizontal sweep paths\n        paths['horizontal_sweep']\
+    \ = self._compute_horizontal_sweep_paths()\n        \n        # Paths to output\
+    \ I/O chiplets\n        for io_id in self.system.get_io_chiplets():\n        \
+    \    paths[f'center_to_output_{io_id}'] = self._compute_path_from_center_to_io(io_id)\n\
+    \        \n        return paths\n```\n\n### **Validation Metrics**\nAdd these\
+    \ to post-processing:\n```yaml\npost_processing:\n  communication_metrics:\n \
+    \   average_hop_count: true\n    cross_mesh_traffic: true\n    io_bottleneck_analysis:\
+    \ true\n```\n\nThis **flow-pipeline mapper** represents a paradigm shift from\
+    \ resource-centric to communication-centric mapping, directly addressing the fundamental\
+    \ weakness of nearest-neighbor in large mesh topologies with corner I/O constraints."
+  function_name: flow_pipeline_mapper
+  improvement_pct:
+    comm_latency: 37.283211097003786
+    compute_latency: -2.1352816011702824
+    total_latency: 35.45439666910861
+  iteration: 3
+  metrics:
+    comm_latency: 186111.4
+    compute_latency: 14745.72
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_center_imc_flow_pipeline_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 186111.4
+        compute_latency: 14745.72
+        total_latency: 200857.12
+    results_label: vgg16_hetero_center_imc_flow_pipeline_mapper
+    total_latency: 200857.12
+  outcome: IMPROVED
+max_iterations: 3
+total_iterations: 3

@@ -1,0 +1,314 @@
+baseline_metrics:
+  comm_latency: 106878.12
+  compute_latency: 19.83
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_cmos_heavy/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 106897.95
+best_metrics:
+  comm_latency: 85961.59
+  compute_latency: 14.98
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_cmos_heavy_quadrant_aware_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_cmos_heavy_quadrant_aware_nearest_neighbor_mapper
+  total_latency: 85976.57
+config: alexnet_hetero_cmos_heavy
+history:
+- function_name: quadrant_aware_nearest_neighbor_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on my analysis of the nearest-neighbor mapper (v3) in the\
+    \ context of this specific CHIPSIM configuration, here are the key weaknesses\
+    \ and improvement opportunities:\n\n## 1. Key Weaknesses of Current Nearest-Neighbor\
+    \ Approach\n\n### **A. Topology-Agnostic Optimization**\nThe mapper only considers\
+    \ Manhattan distance in the mesh network but ignores:\n- **Corner IO placement**:\
+    \ With 4 IO chiplets at corners on a 10\xD710 mesh, the current algorithm doesn't\
+    \ prioritize placing communication-intensive layers near these IO chiplets\n-\
+    \ **Network congestion**: No consideration for bandwidth limitations or potential\
+    \ hotspots around the 4 corner IO chiplets\n- **Asymmetric communication**: All-to-all\
+    \ patterns will suffer since IO chiplets are only at corners\n\n### **B. Homogeneous\
+    \ Treatment of Heterogeneous System**\nDespite having 96 CMOS compute chiplets\
+    \ with uniform weight capacity (2.46M weights each), the algorithm:\n- Treats\
+    \ all compute chiplets equally, missing opportunities for specialized placement\n\
+    - Doesn't account for potential performance differences based on chiplet location\
+    \ relative to IO\n- Ignores that CMOS compute chiplets may have different communication\
+    \ characteristics than IMC chiplets\n\n### **C. Greedy Layer-by-Layer Placement**\n\
+    The sequential mapping approach has critical flaws:\n- **No global optimization**:\
+    \ Each layer is placed independently without considering the full model's communication\
+    \ patterns\n- **Path dependence**: Starting chiplet selection for first layer\
+    \ determines entire mapping trajectory\n- **No backtracking**: Once a layer is\
+    \ placed, it's never reconsidered even if it creates bottlenecks\n\n### **D. Capacity\
+    \ Calculation Issues**\n- **Unit mismatch**: Uses weight units for CMOS but doesn't\
+    \ properly account for weight loading overhead\n- **No fragmentation awareness**:\
+    \ Doesn't optimize for reducing memory fragmentation across chiplets\n- **Round-up\
+    \ waste**: `math.ceil()` in `_calculate_layer_requirements` causes over-allocation\n\
+    \n## 2. Specific Opportunities for This Configuration\n\n### **A. Exploit Mesh\
+    \ Topology with Corner IO**\nSince IO chiplets are fixed at corners:\n1. **Create\
+    \ communication zones**: Partition mesh into 4 quadrants, each anchored to a corner\
+    \ IO chiplet\n2. **Hierarchical mapping**: Map layers to quadrants based on their\
+    \ IO requirements, then use nearest-neighbor within quadrants\n3. **Input/output\
+    \ layer placement**: Ensure first/last layers are placed in quadrants closest\
+    \ to their required IO chiplets\n\n### **B. Leverage Uniform CMOS Capacity**\n\
+    With 96 identical CMOS chiplets:\n1. **Balanced load distribution**: Current algorithm\
+    \ doesn't optimize for even utilization; can implement load balancing\n2. **Weight\
+    \ locality**: Since weights are stationary, should optimize for keeping related\
+    \ weights on nearby chiplets\n3. **Predictable capacity**: Uniform capacity enables\
+    \ more aggressive optimization than heterogeneous systems\n\n### **C. Model-Aware\
+    \ Improvements**\nAlexNet (mentioned in workload) has specific characteristics:\n\
+    - **Early conv layers**: Large feature maps, high activation communication\n-\
+    \ **Later FC layers**: Weight-bound, less activation movement\n- **Natural partition\
+    \ points**: Between conv blocks and before FC layers\n\n## 3. Critical Data/Signals\
+    \ Currently Ignored\n\n### **A. Layer Communication Requirements**\nThe mapper\
+    \ completely ignores:\n- **Activation volumes**: How much data needs to move between\
+    \ layers\n- **Weight reuse patterns**: Which layers share weights or have weight\
+    \ dependencies\n- **Pipeline dependencies**: Which layers can execute in parallel\
+    \ vs sequentially\n\n### **B. Network State Information**\nMissing real-time considerations:\n\
+    - **Link utilization**: Current traffic on network links\n- **Queue backlogs**:\
+    \ Pending communications between chiplets\n- **Dynamic congestion**: Especially\
+    \ around the 4 corner IO chiplets\n\n### **C. Model-Specific Characteristics**\n\
+    For AlexNet specifically:\n- **Layer sizes**: Conv1 (96@55\xD755) \u2192 Pool1\
+    \ \u2192 Conv2 (256@27\xD727) \u2192 etc.\n- **Natural split points**: After each\
+    \ pooling layer or between conv groups\n- **Memory access patterns**: Which layers\
+    \ are compute-bound vs memory-bound\n\n## Recommended Immediate Improvements:\n\
+    \n1. **Add quadrant-based mapping**: Pre-partition the mesh into 4 quadrants centered\
+    \ on IO chiplets\n2. **Implement lookahead**: Consider next layer's requirements\
+    \ when placing current layer\n3. **Add congestion estimation**: Simple model of\
+    \ IO-to-compute chiplet traffic\n4. **Balance utilization**: Track chiplet utilization\
+    \ and steer layers to underutilized regions\n5. **Layer grouping**: Cluster layers\
+    \ with high inter-layer communication and map them together\n\nThe current mapper\
+    \ works for basic placement but will create significant communication bottlenecks\
+    \ for AlexNet on this 10\xD710 mesh with only corner IO chiplets, especially for\
+    \ the large early convolutional layers that need to communicate with IO frequently."
+  function_name: quadrant_aware_nearest_neighbor_mapper
+  improvement_pct:
+    comm_latency: 19.57045090239237
+    compute_latency: 24.457892082702966
+    total_latency: 19.57135754240375
+  iteration: 1
+  metrics:
+    comm_latency: 85961.59
+    compute_latency: 14.98
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_cmos_heavy_quadrant_aware_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 85961.59
+        compute_latency: 14.98
+        total_latency: 85976.57
+    results_label: alexnet_hetero_cmos_heavy_quadrant_aware_nearest_neighbor_mapper
+    total_latency: 85976.57
+  outcome: IMPROVED
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/map"
+  function_name: quadrant_balanced_mapper_v2
+  iteration: 2
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- error: Simulation timed out after 900 seconds.
+  function_name: quadrant_balanced_mapper_v2
+  iteration: 2
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 2
+- error: Simulation timed out after 900 seconds.
+  function_name: quadrant_balanced_mapper
+  iteration: 2
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 3
+- change_summary: "Based on your analysis and the previous optimization attempts,\
+    \ I'll focus on a different strategy that addresses the fundamental weaknesses\
+    \ of the nearest-neighbor mapper for this specific 10\xD710 mesh with corner IO\
+    \ chiplets and uniform CMOS compute chiplets.\n\n## **Optimization Strategy: Quadrant-Aware\
+    \ Balanced Mapping**\n\n### **1. Key Problem with Current Approach**\nThe nearest-neighbor\
+    \ mapper creates **communication hotspots** at the mesh center since it spreads\
+    \ layers outward from a single starting point. With 4 corner IO chiplets, this\
+    \ causes:\n- All communication funneling through central chiplets\n- Poor utilization\
+    \ of IO chiplets (only using the one closest to starting point)\n- Unbalanced\
+    \ load across the 96 CMOS chiplets\n\n### **2. Proposed Algorithm: `quadrant_balanced_mapper`**\n\
+    \n```python\ndef _quadrant_balanced_mapper(self, model_layer_info, system, preference,\
+    \ \n                             current_available_crossbars, layer_mappings=None,\
+    \ \n                             shortest_paths=None):\n    \"\"\"\n    Maps layers\
+    \ using quadrant-aware balanced placement.\n    Partitions the mesh into 4 quadrants\
+    \ centered on IO chiplets.\n    Balances load across quadrants and within each\
+    \ quadrant.\n    \"\"\"\n    mapping_failed = False\n    failure_reason = None\n\
+    \    num_chiplets = len(system.chiplets)\n    remaining_capacity = current_available_crossbars.copy()\n\
+    \    \n    layer_name = model_layer_info['name']\n    crossbars_required = model_layer_info['crossbars_required']\n\
+    \    action = [0] * num_chiplets\n    resources_remaining = crossbars_required\n\
+    \    percentage_remaining = 100\n    \n    # --- STEP 1: Identify Corner IO Chiplets\
+    \ ---\n    corner_io_chiplets = []\n    mesh_size = 10  # From 10x10 mesh\n  \
+    \  \n    # Assuming chiplet IDs follow mesh coordinates: ID = row*10 + col + 1\n\
+    \    corner_positions = [(0,0), (0,9), (9,0), (9,9)]  # 0-based coordinates\n\
+    \    \n    for chiplet_id in range(1, num_chiplets + 1):\n        if system.is_io_chiplet(chiplet_id):\n\
+    \            corner_io_chiplets.append(chiplet_id)\n    \n    # If we couldn't\
+    \ identify corners by IO status, use positions\n    if len(corner_io_chiplets)\
+    \ < 4:\n        for (row, col) in corner_positions:\n            chiplet_id =\
+    \ row * mesh_size + col + 1\n            if chiplet_id <= num_chiplets:\n    \
+    \            corner_io_chiplets.append(chiplet_id)\n    \n    # Sort corners for\
+    \ consistent ordering\n    corner_io_chiplets.sort()\n    \n    # --- STEP 2:\
+    \ Partition Mesh into Quadrants ---\n    quadrants = {cid: [] for cid in corner_io_chiplets}\n\
+    \    \n    for chiplet_id in range(1, num_chiplets + 1):\n        if self.system.is_io_chiplet(chiplet_id):\n\
+    \            continue\n            \n        # Find closest corner (Manhattan\
+    \ distance)\n        min_dist = float('inf')\n        best_corner = None\n   \
+    \     \n        for corner_id in corner_io_chiplets:\n            # Convert to\
+    \ coordinates (0-based)\n            row1 = (corner_id - 1) // mesh_size\n   \
+    \         col1 = (corner_id - 1) % mesh_size\n            row2 = (chiplet_id -\
+    \ 1) // mesh_size\n            col2 = (chiplet_id - 1) % mesh_size\n         \
+    \   \n            dist = abs(row1 - row2) + abs(col1 - col2)\n            if dist\
+    \ < min_dist:\n                min_dist = dist\n                best_corner =\
+    \ corner_id\n        \n        if best_corner:\n            quadrants[best_corner].append(chiplet_id)\n\
+    \    \n    # --- STEP 3: Determine Target Quadrant ---\n    target_quadrant =\
+    \ None\n    \n    if not layer_mappings:\n        # First layer: choose quadrant\
+    \ with highest available capacity\n        quadrant_capacities = {}\n        for\
+    \ corner_id, chiplet_list in quadrants.items():\n            total_cap = 0\n \
+    \           for chiplet_id in chiplet_list:\n                idx = chiplet_id\
+    \ - 1\n                total_cap += remaining_capacity[idx]\n            quadrant_capacities[corner_id]\
+    \ = total_cap\n        \n        # Choose quadrant with most capacity\n      \
+    \  target_quadrant = max(quadrant_capacities.items(), key=lambda x: x[1])[0]\n\
+    \    else:\n        # Determine which quadrants were used in previous layer\n\
+    \        prev_layer_mapping = layer_mappings[-1][1]\n        used_chiplets = [chiplet_id\
+    \ for chiplet_id, _ in prev_layer_mapping]\n        \n        # Count usage per\
+    \ quadrant\n        quadrant_usage = {corner_id: 0 for corner_id in corner_io_chiplets}\n\
+    \        for chiplet_id in used_chiplets:\n            for corner_id, chiplet_list\
+    \ in quadrants.items():\n                if chiplet_id in chiplet_list:\n    \
+    \                quadrant_usage[corner_id] += 1\n                    break\n \
+    \       \n        # Prefer same quadrant to minimize cross-quadrant communication\n\
+    \        max_usage = max(quadrant_usage.values())\n        if max_usage > 0:\n\
+    \            target_quadrant = [cid for cid, usage in quadrant_usage.items() \n\
+    \                             if usage == max_usage][0]\n        else:\n     \
+    \       # If previous layer didn't use any quadrant (shouldn't happen), choose\
+    \ by capacity\n            quadrant_capacities = {}\n            for corner_id,\
+    \ chiplet_list in quadrants.items():\n                total_cap = sum(remaining_capacity[cid-1]\
+    \ for cid in chiplet_list)\n                quadrant_capacities[corner_id] = total_cap\n\
+    \            target_quadrant = max(quadrant_capacities.items(), key=lambda x:\
+    \ x[1])[0]\n    \n    # --- STEP 4: Select Chiplets Within Target Quadrant ---\n\
+    \    candidate_chiplets = quadrants[target_quadrant].copy()\n    \n    # Filter\
+    \ by available capacity\n    candidate_chiplets = [cid for cid in candidate_chiplets\
+    \ \n                         if remaining_capacity[cid-1] > 0]\n    \n    # Apply\
+    \ allowed chiplet filter if present\n    allowed = None\n    if hasattr(self,\
+    \ 'preference') and isinstance(self.preference, dict):\n        allowed = self.preference.get('allowed_chiplet_ids')\n\
+    \    if allowed:\n        allowed_set = set(allowed)\n        candidate_chiplets\
+    \ = [cid for cid in candidate_chiplets if cid in allowed_set]\n    \n    if not\
+    \ candidate_chiplets:\n        # Fallback to other quadrants if target quadrant\
+    \ is full\n        all_candidates = []\n        for corner_id, chiplet_list in\
+    \ quadrants.items():\n            if corner_id == target_quadrant:\n         \
+    \       continue\n            all_candidates.extend([cid for cid in chiplet_list\
+    \ \n                                 if remaining_capacity[cid-1] > 0])\n    \
+    \    \n        if allowed:\n            all_candidates = [cid for cid in all_candidates\
+    \ if cid in allowed_set]\n        \n        candidate_chiplets = all_candidates\n\
+    \    \n    if not candidate_chiplets:\n        return remaining_capacity, None,\
+    \ True, \"NO_AVAILABLE_CHIPLETS\"\n    \n    # --- STEP 5: Sort Within Quadrant\
+    \ by Distance to IO and Capacity ---\n    # Get the IO chiplet for this quadrant\n\
+    \    io_chiplet = target_quadrant\n    \n    # Calculate distances and sort\n\
+    \    chiplet_info = []\n    for chiplet_id in candidate_chiplets:\n        idx\
+    \ = chiplet_id - 1\n        dist = shortest_paths.get(io_chiplet, {}).get(chiplet_id,\
+    \ float('inf'))\n        capacity = remaining_capacity[idx]\n        \n      \
+    \  # Prioritize by: low distance, high capacity\n        chiplet_info.append((chiplet_id,\
+    \ dist, capacity))\n    \n    # Sort: closest to IO first, then by capacity\n\
+    \    chiplet_info.sort(key=lambda x: (x[1], -x[2]))\n    sorted_chiplets = [info[0]\
+    \ for info in chiplet_info]\n    \n    # --- STEP 6: Allocate Layer to Chiplets\
+    \ ---\n    for chiplet_id in sorted_chiplets:\n        if resources_remaining\
+    \ <= 0:\n            break\n            \n        chiplet_idx = chiplet_id - 1\n\
+    \        available_units = remaining_capacity[chiplet_idx]\n        if available_units\
+    \ <= 0:\n            continue\n        \n        # Calculate requirements for\
+    \ full layer on this chiplet\n        units_needed_full = self._calculate_layer_requirements(model_layer_info,\
+    \ \n                                                             system.chiplets[chiplet_idx])\n\
+    \        if units_needed_full <= 0:\n            continue\n        \n        if\
+    \ crossbars_required > 0:\n            units_needed_for_resources = math.ceil(\n\
+    \                resources_remaining * units_needed_full / crossbars_required\n\
+    \            )\n        else:\n            units_needed_for_resources = 0\n  \
+    \      \n        # Allocate to this chiplet\n        if available_units >= units_needed_for_resources:\n\
+    \            # Can fit entire remaining portion\n            remaining_capacity[chiplet_idx]\
+    \ -= units_needed_for_resources\n            alloc_percentage = percentage_remaining\n\
+    \            percentage_remaining = 0\n            resources_remaining = 0\n \
+    \       else:\n            # Can only fit partial portion\n            if units_needed_full\
+    \ > 0:\n                alloc_percentage = (available_units * 100 / units_needed_full)\n\
+    \            else:\n                alloc_percentage = 0\n            \n     \
+    \       remaining_capacity[chiplet_idx] = 0\n            percentage_remaining\
+    \ -= alloc_percentage\n            resources_remaining -= math.ceil(alloc_percentage\
+    \ * crossbars_required / 100)\n        \n        action[chiplet_idx] += alloc_percentage\n\
+    \    \n    # --- STEP 7: Check Allocation Success ---\n    if (resources_remaining\
+    \ - 10) > 0:  # Small tolerance\n        return remaining_capacity, None, True,\
+    \ \"INSUFFICIENT_MEMORY\"\n    \n    # Normalize if needed (should sum to 100\
+    \ \xB1 small tolerance)\n    sum_action = sum(action)\n    if sum_action > 0 and\
+    \ not math.isclose(sum_action, 100, rel_tol=0.01):\n        # Normalize to 100%\n\
+    \        scale = 100.0 / sum_action\n        for i in range(len(action)):\n  \
+    \          if action[i] > 0:\n                action[i] *= scale\n        \n \
+    \       # Recalculate resource allocation after normalization\n        # (This\
+    \ is approximate but maintains proportions)\n    \n    return remaining_capacity,\
+    \ action, False, None\n```\n\n### **3. Layer Partitioner Enhancement for Quadrant\
+    \ Mapping**\n\n```python\ndef partition_layer_with_locality(self, layer_def, chiplet_mappings,\
+    \ system):\n    \"\"\"\n    Enhanced partitioner that considers chiplet locality.\n\
+    \    Groups partitions within same quadrant to minimize cross-quadrant communication.\n\
+    \    \"\"\"\n    # First, partition normally\n    chunks = self.partition_layer(layer_def,\
+    \ chiplet_mappings)\n    \n    # Then, reorder chunks to group by quadrant\n \
+    \   mesh_size = 10\n    corner_io_chiplets = [1, 10, 91, 100]  # Assuming these\
+    \ are corners\n    \n    # Identify quadrant for each chiplet\n    quadrant_groups\
+    \ = {}\n    for chiplet_id, partitioned_layer in chunks:\n        # Find closest\
+    \ corner\n        row = (chiplet_id - 1) // mesh_size\n        col = (chiplet_id\
+    \ - 1) % mesh_size\n        \n        min_dist = float('inf')\n        quadrant\
+    \ = 0\n        \n        for i, corner_id in enumerate(corner_io_chiplets):\n\
+    \            c_row = (corner_id - 1) // mesh_size\n            c_col = (corner_id\
+    \ - 1) % mesh_size\n            dist = abs(row - c_row) + abs(col - c_col)\n \
+    \           \n            if dist < min_dist:\n                min_dist = dist\n\
+    \                quadrant = i\n        \n        if quadrant not in quadrant_groups:\n\
+    \            quadrant_groups[quadrant] = []\n        \n        quadrant_groups[quadrant].append((chiplet_id,\
+    \ partitioned_layer))\n    \n    # Reorder: process quadrants in sequence\n  \
+    \  reordered_chunks = []\n    for quadrant in sorted(quadrant_groups.keys()):\n\
+    \        reordered_chunks.extend(quadrant_groups[quadrant])\n    \n    return\
+    \ reordered_chunks\n```\n\n### **4. Integration with ModelMapper**\n\nAdd to `ModelMapper._get_mapper_function()`:\n\
+    ```python\ndef _get_mapper_function(self):\n    if self.mapping_function == \"\
+    nearest_neighbor_v3\":\n        return self._nearest_neighbor_mapper_v3\n    elif\
+    \ self.mapping_function == \"random_mapper\":\n        return self._random_mapper\n\
+    \    elif self.mapping_function == \"quadrant_balanced\":\n        return self._quadrant_balanced_mapper\
+    \  # Add this\n    else:\n        # ... existing code ...\n```\n\n### **5. Why\
+    \ This Strategy is Different**\n\n1. **Explicit Quadrant Management**: Unlike\
+    \ previous attempts that tweaked distance metrics, this explicitly partitions\
+    \ the mesh into 4 communication domains.\n\n2. **IO-Centric Placement**: Places\
+    \ layers in quadrants anchored to specific IO chiplets, preventing all communication\
+    \ from funneling through a single region.\n\n3. **Load Balancing Across Quadrants**:\
+    \ Tracks quadrant utilization and distributes layers to prevent hotspots.\n\n\
+    4. **Within-Quadrant Locality**: Uses nearest-neighbor within each quadrant but\
+    \ prevents cross-quadrant spreading.\n\n5. **Fallback Mechanism**: If a quadrant\
+    \ fills up, can spill over to adjacent quadrants while maintaining locality.\n\
+    \n### **6. Expected Benefits for AlexNet on 10\xD710 Mesh**\n\n- **Early conv\
+    \ layers**: Will be placed near IO chiplets for efficient input/output\n- **Layer\
+    \ grouping**: Related layers stay in same quadrant, reducing cross-mesh traffic\n\
+    - **Balanced utilization**: All 4 corner IO chiplets get utilized, not just one\n\
+    - **Reduced contention**: Communication spreads across 4 quadrants instead of\
+    \ central hotspots\n\n### **7. Configuration Changes**\n\nIn your CHIPSIM configuration,\
+    \ change:\n```yaml\n# In your mapping configuration or preference\npreference:\n\
+    \  mapping_function: \"quadrant_balanced\"\n  # Optional: can specify preferred\
+    \ quadrants for specific layers\n```\n\nThis approach fundamentally changes the\
+    \ mapping strategy from \"find nearest available chiplet\" to \"place in appropriate\
+    \ quadrant, then find nearest within quadrant.\" For a 10\xD710 mesh with corner\
+    \ IO, this should significantly reduce latency by minimizing long-distance cross-mesh\
+    \ communication."
+  function_name: quadrant_balanced_mapper
+  improvement_pct:
+    comm_latency: 19.57045090239237
+    compute_latency: 24.457892082702966
+    total_latency: 19.57135754240375
+  iteration: 2
+  metrics:
+    comm_latency: 85961.59
+    compute_latency: 14.98
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_cmos_heavy_quadrant_aware_nearest_neighbor_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 85961.59
+        compute_latency: 14.98
+        total_latency: 85976.57
+    results_label: alexnet_hetero_cmos_heavy_quadrant_balanced_mapper
+    total_latency: 85976.57
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 2

@@ -1,6 +1,0 @@
-baseline_metrics: {}
-best_metrics: {}
-config: alexnet_heterogeneous
-history: []
-max_iterations: 3
-total_iterations: 0

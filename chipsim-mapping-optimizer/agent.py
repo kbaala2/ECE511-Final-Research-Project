@@ -179,7 +179,7 @@ class ChipSimState(TypedDict):
 # )
 
 llm = ChatOpenAI(
-    model="deepseek/deepseek-v3.2",
+    model="deepseek/deepseek-v4-pro",
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ["OPENROUTER_API_KEY"]
 )

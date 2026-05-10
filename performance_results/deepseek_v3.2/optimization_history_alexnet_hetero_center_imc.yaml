@@ -1,0 +1,517 @@
+baseline_metrics:
+  comm_latency: 106916.16
+  compute_latency: 661.09
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/alexnet_hetero_center_imc/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 107577.25
+best_metrics:
+  comm_latency: 81377.24
+  compute_latency: 662.92
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_imc_heavy_stage_aware_network_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: alexnet_hetero_center_imc_column_major_mapper
+  total_latency: 82040.15
+config: alexnet_hetero_center_imc
+history:
+- function_name: improved_mesh_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "## Analysis of CHIPSIM Configuration and Mapping Algorithm\n\n\
+    ### 1. Key Weaknesses of Current Nearest-Neighbor Approach\n\n**A. Topology-Specific\
+    \ Problems (10\xD710 Mesh with 96 Compute + 4 I/O Chiplets):**\n- **I/O Placement\
+    \ Bottleneck:** With 4 I/O chiplets at corners, the mapper completely ignores\
+    \ them (`temp_available_capacity[idx] = 0`), forcing all communication through\
+    \ compute chiplets. This creates:\n  - **Long-Latency Paths:** Data must travel\
+    \ from corner I/O chiplets to distant compute chiplets (up to 9 hops diagonally).\n\
+    \  - **Unbalanced Communication:** I/O chiplets at corners have limited connectivity\
+    \ (only 2-3 neighbors vs. 4 for interior chiplets).\n  \n- **Mesh-Specific Locality\
+    \ Ignorance:** The mapper uses simple Manhattan distance (`shortest_paths`) but\
+    \ doesn't consider:\n  - **Row/Column Traffic Patterns:** Mesh networks have higher\
+    \ congestion along rows/columns than diagonals.\n  - **Edge vs. Center Differences:**\
+    \ Edge chiplets have fewer communication paths than center chiplets.\n\n**B. Algorithm\
+    \ Logic Flaws in `_nearest_neighbor_mapper_v3`:**\n- **First-Layer Selection Bias:**\
+    \ For the first layer, it sorts by `(-avail_memory_list[idx], -metric_value)`\u2014\
+    prioritizing chiplets with *most* available memory. This **spreads early layers\
+    \ widely** instead of clustering them near I/O chiplets.\n  \n- **Subsequent Layer\
+    \ Greedy Binding:** After first layer, it always binds to the chiplet with **highest\
+    \ percentage** from previous layer (`max(last_layer_mapping, key=lambda x: x[1])[0]`).\
+    \ This creates:\n  - **Over-commitment Risk:** If a chiplet gets 100% of a large\
+    \ layer, all subsequent layers cluster there, causing hotspot congestion.\n  -\
+    \ **No Load Balancing:** Doesn't redistribute when a chiplet becomes highly occupied.\n\
+    \n- **Capacity Calculation Issues:** \n  - `units_needed_for_resources = math.ceil(resources_remaining\
+    \ * units_needed_full / crossbars_required)` assumes linear scaling between \"\
+    resources\" (crossbars) and \"units\" (weight capacity), but this **ignores non-linear\
+    \ overhead** from partitioning.\n  - The `(resources_remaining - 10) > 0` failure\
+    \ threshold is arbitrary\u201410 crossbars may be significant for small layers.\n\
+    \n**C. Resource Management Blindspots:**\n- **No Communication Cost Modeling:**\
+    \ The mapper only considers distance (`shortest_paths`) but **ignores**:\n  -\
+    \ **Inter-layer communication volume:** Adjacent layers in the model may have\
+    \ high activation transfer needs.\n  - **Network congestion:** Assigning layers\
+    \ to chiplets on same row/column creates shared link contention.\n  \n- **Static\
+    \ Metric Preference:** The `active_metric` (performance/energy_efficiency) is\
+    \ a single scalar per chiplet, but:\n  - Doesn't adapt to **current network state**\
+    \ (e.g., avoiding chiplets with high ongoing traffic).\n  - No **dynamic re-evaluation**\
+    \ during mapping\u2014once a chiplet is chosen for one layer, it remains preferred.\n\
+    \n**D. Layer Partitioner Limitations:**\n- **Fixed Partitioning Axis:** Always\
+    \ partitions along `output_channels` regardless of actual dataflow.\n  - For convolutional\
+    \ layers, this may **break filter coherence** (neighboring output channels often\
+    \ compute similar features).\n  - No consideration for **activation reuse patterns**\
+    \ (partitioning input channels might reduce communication).\n  \n- **Rounding\
+    \ Error Handling is Brittle:** The `_adjust_for_rounding_errors` method adjusts\
+    \ only **one partition** (smallest/largest), which can:\n  - **Create extreme\
+    \ imbalance** (e.g., one chiplet gets +difference while others unchanged).\n \
+    \ - **Violate percentage distributions** from the mapper.\n\n### 2. Specific Opportunities\
+    \ for Improvement Given This Config\n\n**A. Exploit Heterogeneous Placement (96\
+    \ Compute + 4 I/O):**\n- **I/O-Aware Mapping:** Instead of setting I/O chiplet\
+    \ capacity to 0, allow **small compute tasks** on I/O chiplets (e.g., input/output\
+    \ preprocessing). This reduces hop distance for edge data.\n  \n- **Corner Bridge\
+    \ Strategy:** Assign **bridge layers** (those connecting major model segments)\
+    \ to chiplets adjacent to I/O corners (positions (0,1), (1,0), (9,8), (8,9)) to\
+    \ reduce I/O-to-compute latency.\n\n**B. Mesh Topology Optimizations:**\n- **Row/Column\
+    \ Striping:** For large layers, assign percentages along **mesh rows** rather\
+    \ than nearest-neighbor spread. This creates linear communication paths instead\
+    \ of scattered hops.\n  \n- **Contention-Aware Sorting:** Modify `chiplet_info.sort(key=lambda\
+    \ x: (x[1], -x[2], -x[3]))` to include:\n  - **Row/column load** (number of already-assigned\
+    \ layers on same row).\n  - **Link utilization** (estimated based on neighboring\
+    \ chiplet assignments).\n\n**C. Algorithm Enhancements:**\n- **Progressive Load\
+    \ Balancing:** Instead of binding to previous layer's max chiplet, recalculate\
+    \ **optimal starting chiplet** for each layer based on:\n  - Current occupancy\
+    \ (`occupancy_percentages`).\n  - Distance to **all previously assigned chiplets**\
+    \ (weighted by their percentage).\n  \n- **Communication-Aware Layer Ordering:**\
+    \ Pre-sort model layers by **communication intensity** (from workload CSV) and\
+    \ map high-communication adjacent layers to **proximity clusters**.\n\n**D. Capacity\
+    \ Calculation Fixes:**\n- **Non-Linear Overhead Model:** Replace linear `units_needed_for_resources`\
+    \ calculation with:\n  - **Base overhead** (e.g., 5% for partitioning) + linear\
+    \ scaling.\n  - **Chiplet-type-specific factors** (CMOS vs. IMC may have different\
+    \ partitioning costs).\n  \n- **Dynamic Failure Threshold:** Set `(resources_remaining\
+    \ - threshold) > 0` where threshold = `max(5, crossbars_required * 0.05)` (5%\
+    \ of layer size).\n\n### 3. What Data/Signals the Mapper Currently Ignores That\
+    \ It Should Use\n\n**Missing from Inputs:**\n- **Workload Communication Matrix:**\
+    \ The `workload_alexnet.csv` likely contains **inter-layer communication volumes**,\
+    \ but mapper only uses per-layer compute requirements.\n  \n- **Chiplet Real-Time\
+    \ Metrics:** No use of:\n  - **Current network queue occupancy** (available via\
+    \ Garnet simulator).\n  - **Link utilization** between chiplets.\n  - **Thermal/power\
+    \ status** (especially for corner I/O chiplets which may have different cooling).\n\
+    \n**Missing Internal State:**\n- **Historical Assignment Patterns:** No memory\
+    \ of which **chiplet pairs** frequently communicate (to co-locate future layers).\n\
+    \  \n- **Model Structure Awareness:** Doesn't know if layer is **input**, **output**,\
+    \ or **bottleneck** (e.g., AlexNet's fully-connected layers are communication-heavy).\n\
+    \n**Missing Partitioning Feedback:**\n- **Actual Post-Partitioning Cost:** The\
+    \ partitioner's rounding adjustments change actual resource usage, but **mapper\
+    \ doesn't receive feedback** to adjust future assignments.\n  \n- **Cross-Layer\
+    \ Dependencies:** No tracking of which chiplets share **common input activations**\
+    \ (could enable reuse).\n\n---\n\n## Recommended Immediate Improvements for This\
+    \ Config\n\n1. **I/O Adjacency Weighting:** Add `preferred_start_chiplet_id` =\
+    \ chiplet adjacent to I/O for **first layer** (input layer). In `generate_mapping`,\
+    \ detect input layers via workload CSV and set preference.\n\n2. **Row-Priority\
+    \ Sorting:** Change `chiplet_info.sort` to:\n   ```python\n   row = chiplet_id\
+    \ // 10  # For 10x10 mesh\n   row_occupancy = sum(occupancy_percentages[j] for\
+    \ j in range(row*10, (row+1)*10))\n   chiplet_info.sort(key=lambda x: (x[1], row_occupancy,\
+    \ -x[2], -x[3]))\n   ```\n   This spreads load across rows, reducing column congestion.\n\
+    \n3. **Progressive Starting Chiplet:** Replace `starting_chiplet = last_chiplet`\
+    \ with:\n   ```python\n   # Weighted average of previous layer's chiplets\n  \
+    \ prev_chiplets = [(cid, pct) for (cid, pct) in last_layer_mapping if pct > 0]\n\
+    \   weighted_positions = [(cid, pct * distances.get(cid, 0)) for (cid, pct) in\
+    \ prev_chiplets]\n   starting_chiplet = min(weighted_positions, key=lambda x:\
+    \ x[1])[0]  # Chiplet with minimal weighted distance\n   ```\n\n4. **Communication-Aware\
+    \ Filter:** Before sorting `chiplet_info`, filter out chiplets with >80% occupancy\
+    \ (`occupancy_percentages[idx] > 80`) to prevent hotspots.\n\nThese changes would\
+    \ directly address the **mesh congestion** and **I/O distance** problems evident\
+    \ in this 10\xD710 configuration while maintaining the nearest-neighbor framework."
+  function_name: improved_mesh_mapper
+  improvement_pct:
+    comm_latency: -20.572138019173156
+    compute_latency: 2.4020935122298015
+    total_latency: -20.43095542970284
+  iteration: 1
+  metrics:
+    comm_latency: 128911.1
+    compute_latency: 645.21
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_center_imc_improved_mesh_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 128911.1
+        compute_latency: 645.21
+        total_latency: 129556.31
+    results_label: alexnet_hetero_center_imc_improved_mesh_mapper
+    total_latency: 129556.31
+  outcome: NO_IMPROVEMENT
+- function_name: nearest_neighbor_mapper_v3_cluster_aware
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Based on the analysis of the `_nearest_neighbor_mapper_v3` algorithm\
+    \ and the specific 10\xD710 mesh configuration with 96 compute + 4 I/O chiplets,\
+    \ I recommend a **Cluster-Based Mapping with Communication-Aware Initialization**\
+    \ strategy. The previous optimization attempt likely failed because it didn't\
+    \ fundamentally change the nearest-neighbor approach's core weaknesses.\n\n##\
+    \ NEW OPTIMIZATION STRATEGY: Cluster-Based with Communication-Aware Initialization\n\
+    \n### Implementation Plan:\n\n**1. Add Cluster Detection for First Layer:**\n\
+    Instead of randomly selecting the starting chiplet based on available memory,\
+    \ detect natural clusters in the mesh topology and place the first layer near\
+    \ I/O chiplets.\n\n```python\ndef _nearest_neighbor_mapper_v3_cluster_aware(self,\
+    \ model_layer_info, system, preference, current_available_crossbars, layer_mappings=None,\
+    \ shortest_paths=None):\n    \"\"\"\n    Enhanced nearest-neighbor with cluster-aware\
+    \ initialization and load distribution.\n    \"\"\"\n    # ... [keep existing\
+    \ initialization code until layer_mappings check] ...\n    \n    if not layer_mappings:\n\
+    \        available_chiplet_ids = [idx + 1 for idx, cu in enumerate(remaining_capacity)\
+    \ \n                                if cu > 0 and not self.system.is_io_chiplet(idx\
+    \ + 1)]\n        \n        # NEW: Identify 4 clusters centered around I/O chiplets\
+    \ (corners)\n        io_chiplets = [1, 10, 91, 100]  # Corner positions in 10x10\
+    \ mesh\n        io_clusters = {}\n        \n        for io_id in io_chiplets:\n\
+    \            # Find compute chiplets within 2 hops of this I/O chiplet\n     \
+    \       cluster_members = []\n            for comp_id in available_chiplet_ids:\n\
+    \                distance = shortest_paths.get(io_id, {}).get(comp_id, math.inf)\n\
+    \                if distance <= 2:  # Within 2 hops\n                    cluster_members.append(comp_id)\n\
+    \            io_clusters[io_id] = cluster_members\n        \n        # NEW: For\
+    \ input layers, prefer clusters near I/O\n        layer_name = model_layer_info['name'].lower()\n\
+    \        is_input_layer = 'input' in layer_name or layer_idx == 0\n        \n\
+    \        if is_input_layer and io_clusters:\n            # Choose the cluster\
+    \ with most available capacity\n            best_cluster = None\n            best_avg_capacity\
+    \ = -1\n            \n            for io_id, cluster_members in io_clusters.items():\n\
+    \                if cluster_members:\n                    avg_capacity = np.mean([remaining_capacity[cid-1]\
+    \ for cid in cluster_members])\n                    if avg_capacity > best_avg_capacity:\n\
+    \                        best_avg_capacity = avg_capacity\n                  \
+    \      best_cluster = cluster_members\n            \n            if best_cluster:\n\
+    \                # Sort cluster members by capacity (not just distance)\n    \
+    \            cluster_info = []\n                for chiplet_id in best_cluster:\n\
+    \                    idx = chiplet_id - 1\n                    metric_value =\
+    \ chiplet_network.nodes[chiplet_id].get(active_metric, 0)\n                  \
+    \  cluster_info.append((chiplet_id, avail_memory_list[idx], metric_value))\n \
+    \               \n                cluster_info.sort(key=lambda x: (-x[1], -x[2]))\n\
+    \                starting_chiplet = cluster_info[0][0] if cluster_info else available_chiplet_ids[0]\n\
+    \            else:\n                # Fallback to original logic\n           \
+    \     chiplet_info = []\n                for chiplet_id in available_chiplet_ids:\n\
+    \                    idx = chiplet_id - 1\n                    metric_value =\
+    \ chiplet_network.nodes[chiplet_id].get(active_metric, 0)\n                  \
+    \  chiplet_info.append((chiplet_id, avail_memory_list[idx], metric_value))\n \
+    \               chiplet_info.sort(key=lambda x: (-x[1], -x[2]))\n            \
+    \    starting_chiplet = chiplet_info[0][0] if chiplet_info else available_chiplet_ids[0]\n\
+    \        else:\n            # Original logic for non-input layers\n          \
+    \  chiplet_info = []\n            for chiplet_id in available_chiplet_ids:\n \
+    \               idx = chiplet_id - 1\n                metric_value = chiplet_network.nodes[chiplet_id].get(active_metric,\
+    \ 0)\n                chiplet_info.append((chiplet_id, avail_memory_list[idx],\
+    \ metric_value))\n            chiplet_info.sort(key=lambda x: (-x[1], -x[2]))\n\
+    \            starting_chiplet = chiplet_info[0][0] if chiplet_info else available_chiplet_ids[0]\n\
+    \    \n    else:\n        # MODIFIED: Don't just pick max percentage chiplet\n\
+    \        last_layer_mapping = layer_mappings[-1][1]\n        \n        # Calculate\
+    \ weighted center of previous layer's allocation\n        total_percentage = sum(pct\
+    \ for _, pct in last_layer_mapping)\n        if total_percentage > 0:\n      \
+    \      weighted_chiplets = []\n            for chiplet_id, percentage in last_layer_mapping:\n\
+    \                if percentage > 0:\n                    # Convert chiplet_id\
+    \ to mesh coordinates\n                    row = (chiplet_id - 1) // 10\n    \
+    \                col = (chiplet_id - 1) % 10\n                    weight = percentage\
+    \ / total_percentage\n                    weighted_chiplets.append((row, col,\
+    \ weight))\n            \n            # Calculate center of mass\n           \
+    \ if weighted_chiplets:\n                center_row = sum(r * w for r, _, w in\
+    \ weighted_chiplets)\n                center_col = sum(c * w for _, c, w in weighted_chiplets)\n\
+    \                \n                # Find chiplet closest to center of mass\n\
+    \                min_dist = math.inf\n                starting_chiplet = None\n\
+    \                \n                for chiplet_id in available_chiplet_ids:\n\
+    \                    row = (chiplet_id - 1) // 10\n                    col = (chiplet_id\
+    \ - 1) % 10\n                    dist = abs(row - center_row) + abs(col - center_col)\n\
+    \                    if dist < min_dist:\n                        min_dist = dist\n\
+    \                        starting_chiplet = chiplet_id\n            else:\n  \
+    \              starting_chiplet = available_chiplet_ids[0]\n        else:\n  \
+    \          starting_chiplet = available_chiplet_ids[0]\n    \n    # NEW: Add load-aware\
+    \ filtering before allocation\n    filtered_chiplet_ids = []\n    for chiplet_id\
+    \ in available_chiplet_ids:\n        idx = chiplet_id - 1\n        occupancy =\
+    \ occupancy_percentages[idx]\n        # Skip chiplets with >85% occupancy unless\
+    \ absolutely necessary\n        if occupancy < 85 or resources_remaining > crossbars_required\
+    \ * 0.5:\n            filtered_chiplet_ids.append(chiplet_id)\n    \n    if not\
+    \ filtered_chiplet_ids:\n        filtered_chiplet_ids = available_chiplet_ids\
+    \  # Fallback\n    \n    # Continue with filtered list instead of all available\
+    \ chiplets\n    # ... [rest of the allocation logic using filtered_chiplet_ids]\
+    \ ...\n```\n\n**2. Modify the Layer Partitioner for Better Load Distribution:**\n\
+    ```python\ndef partition_layer_cluster_aware(self, layer_def, chiplet_mappings):\n\
+    \    \"\"\"\n    Enhanced partitioning that considers chiplet proximity for better\
+    \ load distribution.\n    \"\"\"\n    # Group chiplets by proximity before partitioning\n\
+    \    chiplet_groups = []\n    current_group = []\n    \n    # Sort by chiplet_id\
+    \ to get spatial ordering (in mesh topology)\n    sorted_mappings = sorted(chiplet_mappings,\
+    \ key=lambda x: x[0])\n    \n    for chiplet_id, percentage in sorted_mappings:\n\
+    \        if not current_group:\n            current_group.append((chiplet_id,\
+    \ percentage))\n        else:\n            last_id = current_group[-1][0]\n  \
+    \          # Check if chiplets are adjacent (difference of 1 in same row or 10\
+    \ in same column)\n            if (abs(chiplet_id - last_id) == 1 and (chiplet_id\
+    \ - 1) // 10 == (last_id - 1) // 10) or \\\n               (abs(chiplet_id - last_id)\
+    \ == 10):\n                current_group.append((chiplet_id, percentage))\n  \
+    \          else:\n                chiplet_groups.append(current_group)\n     \
+    \           current_group = [(chiplet_id, percentage)]\n    \n    if current_group:\n\
+    \        chiplet_groups.append(current_group)\n    \n    # Distribute rounding\
+    \ errors within groups first\n    network_chunks = []\n    for group in chiplet_groups:\n\
+    \        group_chunks = super().partition_layer(layer_def, group)\n        \n\
+    \        # Adjust within group to minimize inter-group communication\n       \
+    \ if len(group) > 1:\n            total_percentage = sum(pct for _, pct in group)\n\
+    \            # Ensure group gets exactly its share of resources\n            self._balance_within_group(layer_def,\
+    \ group_chunks, total_percentage)\n        \n        network_chunks.extend(group_chunks)\n\
+    \    \n    return network_chunks\n```\n\n**3. Key Configuration Changes for CHIPSIM:**\n\
+    \nUpdate the mapping configuration to use the new strategy:\n```yaml\nmapping:\n\
+    \  algorithm: \"nearest_neighbor_v3_cluster_aware\"\n  parameters:\n    cluster_radius:\
+    \ 2  # hops from I/O chiplets\n    max_occupancy_threshold: 85  # percentage\n\
+    \    enable_load_balancing: true\n```\n\n**4. Why This Strategy Addresses Previous\
+    \ Weaknesses:**\n\n1. **I/O Awareness:** Creates explicit clusters around corner\
+    \ I/O chiplets, reducing hop distance for input/output layers.\n\n2. **Load Distribution:**\
+    \ The 85% occupancy threshold prevents hotspot formation while still allowing\
+    \ efficient packing.\n\n3. **Center-of-Mass Calculation:** For subsequent layers,\
+    \ calculates weighted center rather than picking the max chiplet, distributing\
+    \ load more evenly.\n\n4. **Spatial Grouping:** The enhanced partitioner groups\
+    \ adjacent chiplets together, reducing inter-chiplet communication overhead.\n\
+    \n5. **Mesh Topology Exploitation:** By considering row/column adjacency in grouping,\
+    \ it respects the mesh structure's natural communication patterns.\n\n**Expected\
+    \ Impact:**\n- Reduced communication latency by placing input layers near I/O\
+    \ chiplets\n- Better load balancing across the 96 compute chiplets\n- Lower network\
+    \ congestion by avoiding over-commitment to single chiplets\n- Improved spatial\
+    \ locality for partitioned layers\n\nThis approach fundamentally changes the initialization\
+    \ and progression logic while maintaining compatibility with the existing nearest-neighbor\
+    \ allocation mechanism."
+  function_name: nearest_neighbor_mapper_v3_cluster_aware
+  improvement_pct:
+    comm_latency: -5.58926732871813
+    compute_latency: 0.7366621791284098
+    total_latency: -5.5503928572258605
+  iteration: 2
+  metrics:
+    comm_latency: 112891.99
+    compute_latency: 656.22
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_center_imc_nearest_neighbor_mapper_v3_cluster_aware/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 112891.99
+        compute_latency: 656.22
+        total_latency: 113548.21
+    results_label: alexnet_hetero_center_imc_nearest_neighbor_mapper_v3_cluster_aware
+    total_latency: 113548.21
+  outcome: NO_IMPROVEMENT
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 577, in run_simulation\n    mapping, used_capacity, failure_reason = self.model_mapper.generate_mapping(model_metrics=model_metrics)\n\
+    \                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/map"
+  function_name: column_major_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 1
+- error: Simulation timed out after 900 seconds.
+  function_name: column_major_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 2
+- error: "Traceback (most recent call last):\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 293, in main\n    return run_simulate_mode(args.config)\n  File \"/home/ECE511-Final-Research-Project/CHIPSIM/simulate.py\"\
+    , line 87, in run_simulate_mode\n    raw_results_dir = runner.run()\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 51, in run\n    self._run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"\
+    /home/ECE511-Final-Research-Project/CHIPSIM/src/run/simulation_runner.py\", line\
+    \ 122, in _run_simulation\n    self.gm.run_simulation()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 724, in run_simulation\n    self.simulate_communication()\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n\
+    \  File \"/home/ECE511-Final-Research-Project/CHIPSIM/src/sim/global_manager.py\"\
+    , line 413, in simulate_communication\n    return self.comm_orchestrator.simulate_communication(\n\
+    \           ~~~~~~~~~~~~~~~~~~~~~~~~"
+  function_name: column_major_mapper
+  iteration: 3
+  outcome: RUNTIME_ERROR
+  runtime_attempt: 3
+- change_summary: "Based on the analysis and previous failed optimizations, I recommend\
+    \ abandoning the reactive nearest-neighbor approach in favor of a **proactive,\
+    \ topology-aware partitioning strategy**. The key insight is that the current\
+    \ algorithm makes local decisions that create global inefficiencies on the 10\xD7\
+    10 mesh.\n\n## NEW OPTIMIZATION: **Column-Major Contention-Aware Mapping**\n\n\
+    ### Core Problem Identification\nThe previous approach failed because:\n1. **Nearest-neighbor\
+    \ spreads unpredictably** - Creates irregular patterns that stress random mesh\
+    \ links\n2. **No awareness of mesh column/row contention** - Multiple flows on\
+    \ same column compete for bandwidth\n3. **First-layer placement is arbitrary**\
+    \ - Chooses based on available memory, not topology\n\n### Implementation Strategy\n\
+    \n**1. Replace `_nearest_neighbor_mapper_v3` with `_column_major_mapper`:**\n\n\
+    ```python\ndef _column_major_mapper(self, model_layer_info, system, preference,\
+    \ current_available_crossbars, layer_mappings=None, shortest_paths=None):\n  \
+    \  \"\"\"\n    Maps layers using column-major allocation to minimize row contention\
+    \ in mesh topology.\n    For 10x10 mesh, allocates entire columns at a time when\
+    \ possible.\n    \"\"\"\n    chiplets = system.chiplets\n    num_chiplets = len(chiplets)\n\
+    \    mapping_failed = False\n    failure_reason = None\n    \n    # Treat as capacity\
+    \ units\n    remaining_capacity = current_available_crossbars.copy()\n    \n \
+    \   layer_name = model_layer_info['name']\n    crossbars_required = model_layer_info['crossbars_required']\n\
+    \    action = [0] * num_chiplets\n    resources_remaining = crossbars_required\n\
+    \    percentage_remaining = 100\n    \n    # Calculate occupancy for all chiplets\n\
+    \    occupancy_percentages = []\n    avail_memory_list = []\n    \n    for idx,\
+    \ chiplet in enumerate(chiplets):\n        if self.system.is_io_chiplet(idx +\
+    \ 1):\n            avail_memory_list.append(0)\n            occupancy_percentages.append(100)\n\
+    \        else:\n            unit_size = chiplet.get_capacity_unit_size()\n   \
+    \         avail_memory = remaining_capacity[idx] * unit_size\n            total_memory\
+    \ = chiplet.get_total_memory()\n            occupancy = (total_memory - avail_memory)\
+    \ / total_memory * 100 if total_memory > 0 else 100\n            avail_memory_list.append(avail_memory)\n\
+    \            occupancy_percentages.append(occupancy)\n    \n    # NEW: Determine\
+    \ allocation pattern based on layer size\n    MESH_SIZE = 10  # From config\n\
+    \    COLUMN_COUNT = MESH_SIZE\n    \n    # Get available compute chiplets\n  \
+    \  available_chiplet_ids = [idx + 1 for idx, cu in enumerate(remaining_capacity)\
+    \ \n                            if cu > 0 and not self.system.is_io_chiplet(idx\
+    \ + 1)]\n    \n    if not available_chiplet_ids:\n        return remaining_capacity,\
+    \ None, True, \"NO_AVAILABLE_CHIPLETS\"\n    \n    # NEW: For first layer, place\
+    \ near center column to minimize average distance\n    if not layer_mappings:\n\
+    \        # Choose starting column based on layer size\n        if crossbars_required\
+    \ < 500:  # Small layer\n            # Place near center for balanced access\n\
+    \            starting_column = 4  # Column 4 (0-indexed, so chiplets 5, 15, 25...)\n\
+    \        elif crossbars_required < 2000:  # Medium layer\n            # Use columns\
+    \ 3 and 6\n            starting_column = 3\n        else:  # Large layer\n   \
+    \         # Spread across multiple columns from center\n            starting_column\
+    \ = 2\n        \n        # Get all chiplets in this column\n        column_chiplets\
+    \ = [cid for cid in available_chiplet_ids \n                          if (cid\
+    \ - 1) % MESH_SIZE == starting_column]\n        \n        if not column_chiplets:\n\
+    \            # Fallback to nearest column with capacity\n            for col_offset\
+    \ in range(1, MESH_SIZE):\n                for direction in [1, -1]:\n       \
+    \             test_col = (starting_column + col_offset * direction) % MESH_SIZE\n\
+    \                    column_chiplets = [cid for cid in available_chiplets \n \
+    \                                     if (cid - 1) % MESH_SIZE == test_col]\n\
+    \                    if column_chiplets:\n                        break\n    \
+    \            if column_chiplets:\n                    break\n        \n      \
+    \  sorted_column_ids = sorted(column_chiplets, \n                            \
+    \      key=lambda cid: occupancy_percentages[cid-1])\n    else:\n        # For\
+    \ subsequent layers, continue in same column pattern\n        last_layer_mapping\
+    \ = layer_mappings[-1][1]\n        \n        # Find which columns were used in\
+    \ previous layer\n        used_columns = set()\n        for chiplet_id, percentage\
+    \ in last_layer_mapping:\n            if percentage > 0:\n                col\
+    \ = (chiplet_id - 1) % MESH_SIZE\n                used_columns.add(col)\n    \
+    \    \n        if used_columns:\n            # Continue using same columns if\
+    \ they have capacity\n            column_chiplets = []\n            for col in\
+    \ sorted(used_columns):\n                column_chiplets.extend([cid for cid in\
+    \ available_chiplet_ids \n                                      if (cid - 1) %\
+    \ MESH_SIZE == col])\n            \n            if not column_chiplets:\n    \
+    \            # Need new columns - choose adjacent to previously used\n       \
+    \         new_columns = set()\n                for col in used_columns:\n    \
+    \                for offset in [1, -1]:\n                        new_col = (col\
+    \ + offset) % MESH_SIZE\n                        if new_col not in used_columns:\n\
+    \                            new_columns.add(new_col)\n                \n    \
+    \            for col in sorted(new_columns):\n                    column_chiplets.extend([cid\
+    \ for cid in available_chiplets \n                                          if\
+    \ (cid - 1) % MESH_SIZE == col])\n        else:\n            # Fallback: use center\
+    \ column\n            column_chiplets = [cid for cid in available_chiplet_ids\
+    \ \n                             if (cid - 1) % MESH_SIZE == 4]\n        \n  \
+    \      sorted_column_ids = sorted(column_chiplets, \n                        \
+    \          key=lambda cid: occupancy_percentages[cid-1])\n    \n    # NEW: Allocate\
+    \ in column-major order\n    for chiplet_id in sorted_column_ids:\n        if\
+    \ resources_remaining <= 0:\n            break\n        \n        chiplet_idx\
+    \ = chiplet_id - 1\n        available_units = remaining_capacity[chiplet_idx]\n\
+    \        \n        if available_units <= 0:\n            continue\n        \n\
+    \        units_needed_full = self._calculate_layer_requirements(model_layer_info,\
+    \ chiplets[chiplet_idx])\n        if units_needed_full <= 0:\n            continue\n\
+    \        \n        if crossbars_required > 0:\n            units_needed_for_resources\
+    \ = math.ceil(resources_remaining * units_needed_full / crossbars_required)\n\
+    \        else:\n            units_needed_for_resources = 0\n        \n       \
+    \ # NEW: Cap allocation per chiplet to prevent over-concentration\n        max_percentage_per_chiplet\
+    \ = min(50, 100 / max(1, len(sorted_column_ids)))\n        \n        if available_units\
+    \ >= units_needed_for_resources:\n            # Check if this would exceed per-chiplet\
+    \ cap\n            potential_percentage = percentage_remaining\n            if\
+    \ potential_percentage > max_percentage_per_chiplet:\n                alloc_percentage\
+    \ = max_percentage_per_chiplet\n                units_used = math.ceil(alloc_percentage\
+    \ * units_needed_full / 100)\n                remaining_capacity[chiplet_idx]\
+    \ -= units_used\n                percentage_remaining -= alloc_percentage\n  \
+    \              resources_remaining -= math.ceil(alloc_percentage * crossbars_required\
+    \ / 100)\n            else:\n                remaining_capacity[chiplet_idx] -=\
+    \ units_needed_for_resources\n                alloc_percentage = percentage_remaining\n\
+    \                percentage_remaining = 0\n                resources_remaining\
+    \ = 0\n        else:\n            # Can't fulfill full need, allocate what's available\n\
+    \            alloc_percentage = (available_units * 100 / units_needed_full) if\
+    \ units_needed_full > 0 else 0\n            \n            # Enforce per-chiplet\
+    \ cap\n            if alloc_percentage > max_percentage_per_chiplet:\n       \
+    \         alloc_percentage = max_percentage_per_chiplet\n                units_used\
+    \ = math.ceil(alloc_percentage * units_needed_full / 100)\n                remaining_capacity[chiplet_idx]\
+    \ -= units_used\n            else:\n                remaining_capacity[chiplet_idx]\
+    \ = 0\n            \n            percentage_remaining -= alloc_percentage\n  \
+    \          resources_remaining -= math.ceil(alloc_percentage * crossbars_required\
+    \ / 100)\n        \n        action[chiplet_idx] = alloc_percentage\n        \n\
+    \        # NEW: If we still need resources but this column is exhausted, expand\
+    \ to adjacent columns\n        if resources_remaining > 0 and percentage_remaining\
+    \ > 0:\n            current_col = (chiplet_id - 1) % MESH_SIZE\n            \n\
+    \            # Get adjacent columns not yet used\n            adjacent_cols =\
+    \ [(current_col + 1) % MESH_SIZE, \n                            (current_col -\
+    \ 1) % MESH_SIZE]\n            \n            for adj_col in adjacent_cols:\n \
+    \               adj_chiplets = [cid for cid in available_chiplet_ids \n      \
+    \                        if (cid - 1) % MESH_SIZE == adj_col and \n          \
+    \                    cid not in sorted_column_ids and\n                      \
+    \        remaining_capacity[cid-1] > 0]\n                \n                sorted_column_ids.extend(sorted(adj_chiplets,\
+    \ \n                                              key=lambda cid: occupancy_percentages[cid-1]))\n\
+    \    \n    if (resources_remaining - 10) > 0:\n        return remaining_capacity,\
+    \ None, True, \"INSUFFICIENT_MEMORY\"\n    \n    sum_action = sum(action)\n  \
+    \  if sum_action > 0 and not math.isclose(sum_action, 100, rel_tol=1):\n     \
+    \   print(f\"Warning: Layer '{layer_name}' action sum is {sum_action}, not 100.\
+    \ Action: {action}\")\n    \n    return remaining_capacity, action, False, None\n\
+    ```\n\n**2. Add complementary partitioning strategy:**\n\n```python\ndef partition_layer_column_aware(self,\
+    \ layer_def, chiplet_mappings):\n    \"\"\"\n    Partition layers with awareness\
+    \ of column-based allocation.\n    Groups chiplets by column for better communication\
+    \ patterns.\n    \"\"\"\n    # Group by column\n    MESH_SIZE = 10\n    column_groups\
+    \ = {}\n    \n    for chiplet_id, percentage in chiplet_mappings:\n        col\
+    \ = (chiplet_id - 1) % MESH_SIZE\n        if col not in column_groups:\n     \
+    \       column_groups[col] = []\n        column_groups[col].append((chiplet_id,\
+    \ percentage))\n    \n    # Process each column group\n    network_chunks = []\n\
+    \    \n    for col in sorted(column_groups.keys()):\n        column_mappings =\
+    \ column_groups[col]\n        \n        # Sort within column by chiplet_id (which\
+    \ gives row order)\n        column_mappings.sort(key=lambda x: x[0])\n       \
+    \ \n        # Calculate total percentage for this column\n        col_total_pct\
+    \ = sum(pct for _, pct in column_mappings)\n        \n        # Adjust percentages\
+    \ to maintain column-wise coherence\n        if col_total_pct > 0:\n         \
+    \   # Get base partitioned chunks for this column\n            col_chunks = super().partition_layer(layer_def,\
+    \ column_mappings)\n            \n            # Adjust to ensure each column gets\
+    \ integer number of channels\n            self._balance_column_partition(layer_def,\
+    \ col_chunks, col_total_pct)\n            \n            network_chunks.extend(col_chunks)\n\
+    \    \n    return network_chunks\n\ndef _balance_column_partition(self, original_layer,\
+    \ column_chunks, column_percentage):\n    \"\"\"\n    Ensure each column gets\
+    \ an integer number of output channels.\n    \"\"\"\n    params = original_layer.get('parameters',\
+    \ {})\n    original_channels = params.get('output_channels', 1)\n    \n    # Calculate\
+    \ how many channels this column should get\n    col_channels = max(1, round(original_channels\
+    \ * column_percentage / 100))\n    \n    # Distribute these channels among chiplets\
+    \ in the column\n    total_assigned = sum(chunk[1]['parameters']['output_channels']\
+    \ for chunk in column_chunks)\n    \n    if total_assigned != col_channels:\n\
+    \        difference = col_channels - total_assigned\n        \n        if difference\
+    \ > 0:\n            # Add to smallest partitions first\n            column_chunks.sort(key=lambda\
+    \ x: x[1]['parameters']['output_channels'])\n            for i in range(min(difference,\
+    \ len(column_chunks))):\n                column_chunks[i][1]['parameters']['output_channels']\
+    \ += 1\n        else:\n            # Remove from largest partitions first\n  \
+    \          column_chunks.sort(key=lambda x: x[1]['parameters']['output_channels'],\
+    \ reverse=True)\n            for i in range(min(abs(difference), len(column_chunks))):\n\
+    \                if column_chunks[i][1]['parameters']['output_channels'] > 1:\n\
+    \                    column_chunks[i][1]['parameters']['output_channels'] -= 1\n\
+    ```\n\n**3. Why this will work better:**\n\n1. **Exploits mesh regularity**: Column-major\
+    \ allocation creates predictable communication patterns that mesh routers can\
+    \ optimize.\n\n2. **Minimizes row contention**: By keeping allocations within\
+    \ columns, we reduce traffic across rows, which are the bottleneck in mesh networks.\n\
+    \n3. **Balanced load distribution**: The 50% per-chiplet cap prevents hotspots\
+    \ while allowing efficient packing.\n\n4. **Topology-aware placement**: First\
+    \ layer placement considers layer size and places near center for minimal average\
+    \ distance.\n\n5. **Graceful expansion**: When a column fills, expands to adjacent\
+    \ columns maintaining locality.\n\n**4. Configuration changes:**\n\n```yaml\n\
+    # In chiplet_mapping config\nmapping_algorithm: \"column_major\"\nparameters:\n\
+    \  mesh_size: 10\n  max_percentage_per_chiplet: 50\n  starting_column_small: 4\n\
+    \  starting_column_medium: 3\n  starting_column_large: 2\n```\n\nThis approach\
+    \ fundamentally changes from reactive nearest-neighbor to proactive topology-aware\
+    \ allocation, directly addressing the mesh-specific weaknesses while maintaining\
+    \ the overall mapping framework."
+  function_name: column_major_mapper
+  improvement_pct:
+    comm_latency: 23.88686612014498
+    compute_latency: -0.2768155621776047
+    total_latency: 23.73838334778032
+  iteration: 3
+  metrics:
+    comm_latency: 81377.24
+    compute_latency: 662.92
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/alexnet_hetero_imc_heavy_stage_aware_network_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      alexnet:
+        comm_latency: 81377.24
+        compute_latency: 662.92
+        total_latency: 82040.15
+    results_label: alexnet_hetero_center_imc_column_major_mapper
+    total_latency: 82040.15
+  outcome: IMPROVED
+max_iterations: 3
+total_iterations: 3

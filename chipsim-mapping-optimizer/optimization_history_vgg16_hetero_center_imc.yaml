@@ -1,0 +1,358 @@
+baseline_metrics:
+  comm_latency: 296748.93
+  compute_latency: 14437.44
+  metrics_file: /home/ECE511-Final-Research-Project/performance_results/baseline/heterogenous/vgg16_hetero_center_imc/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  total_latency: 311186.37
+best_metrics:
+  comm_latency: 284509.25
+  compute_latency: 14599.86
+  metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_center_imc_weighted_comm_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+  num_models: 1
+  results_label: vgg16_hetero_center_imc_weighted_comm_mapper
+  total_latency: 299109.11
+config: vgg16_hetero_center_imc
+history:
+- function_name: improved_centroid_mapper
+  iteration: 1
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "1. Key Weaknesses of the Current Nearest-Neighbor Approach  \n\
+    \   - **Myopic, greedy allocation without communication cost modeling**  \n  \
+    \   The mapper places each layer independently, filling the nearest chiplets (by\
+    \ hop distance) from the previous layer\u2019s most allocated chiplet. It does\
+    \ not estimate or optimize the activation communication volume between layers.\
+    \ For weight\u2011stationary pipelines, this can easily produce high\u2011volume\
+    \ traffic that traverses many hops because producer and consumer partitions end\
+    \ up far apart.  \n\n   - **No awareness of I/O placement**  \n     The 10\xD7\
+    10 mesh has four I/O chiplets at the corners. The initial layer\u2019s input must\
+    \ come from an I/O node, and the final layer\u2019s output must go to an I/O node,\
+    \ yet the mapper ignores this. The first layer is arbitrarily placed on the chiplet\
+    \ with the most free memory, which may be deep in the mesh, adding unnecessary\
+    \ latency and energy for input data movement.  \n\n   - **Anchor\u2011only chaining\
+    \ between layers**  \n     Only the chiplet that received the largest percentage\
+    \ of the current layer is used as the starting point for the next layer. This\
+    \ single\u2011point heuristic discards the spatial distribution of the current\
+    \ layer\u2019s output and can lead to inefficient mappings when the current layer\
+    \ is spread over many chiplets \u2013 the next layer\u2019s \u201Ccenter\u201D\
+    \ may not align well with its actual input sources.  \n\n   - **Capacity fragmentation\
+    \ over time**  \n     The algorithm fills the nearest available chiplets without\
+    \ any load balancing. Over many layers, the central region becomes heavily occupied\
+    \ while far\u2011away chiplets remain underutilised. Later large layers are then\
+    \ forced to spread far from the rest of the pipeline, increasing network distances\
+    \ and making some memory capacity unreachable for practical use.  \n\n   - **Ignores\
+    \ potential for single\u2011chiplet mapping**  \n     Although a layer that fits\
+    \ entirely in one chiplet *is* assigned to a single chiplet (good), the algorithm\
+    \ does not globally consider the benefit of keeping certain layers whole to avoid\
+    \ inter\u2011chiplet communication. It never re\u2011evaluates earlier decisions\
+    \ to enable later layers to be placed contiguously.  \n\n   - **No look\u2011\
+    ahead or global optimisation**  \n     The sequential, greedy nature with no backtracking\
+    \ means the mapper cannot trade off memory occupation against communication cost\
+    \ across the whole model. A suboptimal early placement can degrade the mapping\
+    \ quality for all subsequent layers.  \n\n2. Specific Opportunities for Improvement\
+    \ Given This Configuration  \n   - **I/O\u2011aware first/last layer anchoring**\
+    \  \n     With corner I/O chiplets, the first (and sometimes last) layer should\
+    \ be placed as close as possible to those corners. One could bias the start chiplet\
+    \ selection by adding a penalty proportional to the distance to the nearest I/O\
+    \ chiplet. This would reduce input/output activation latency with almost no change\
+    \ to the algorithm\u2019s structure.  \n\n   - **Communication\u2011volume\u2011\
+    weighted distance minimisation**  \n     Since the layer parameters are known\
+    \ (number of output channels, input activation size), the mapper can compute the\
+    \ expected amount of data flowing between layer *i* and layer *i+1*. During placement\
+    \ of layer *i+1*, instead of anchoring on the single max\u2011percentage chiplet\
+    \ of layer *i*, compute a weighted centroid of layer *i*\u2019s output *channels*\
+    \ and *volume*, then select the start chiplet that minimises the sum of (distance\
+    \ \xD7 partial volume) to all producer chiplets.  \n\n   - **Load\u2011balanced\
+    \ placement to preserve central capacity**  \n     Introduce a soft occupation\
+    \ cap or a repulsion term in the chiplet sorting to prevent the centre from filling\
+    \ up too quickly. For example, when two chiplets are equally distant, prefer the\
+    \ one with lower occupancy. This leaves room near the pipeline core for intermediate\
+    \ layers that benefit from proximity.  \n\n   - **Layer packing:** For small layers,\
+    \ explicitly try to pack them onto chiplets that already contain previous layers\u2019\
+    \ weights (reusing same chiplets) as long as they fit, even if they are slightly\
+    \ farther. This reduces fragmentation and conserves fresh memory for giant layers.\
+    \  \n\n   - **Global optimisation pass**  \n     After the initial greedy placement,\
+    \ run a lightweight post\u2011pass (e.g., simulated annealing or a few swap moves)\
+    \ that exchanges layer partitions between chiplets to reduce the overall weighted\
+    \ communication distance while keeping memory constraints satisfied. With only\
+    \ 16 layers in VGG\u201116 and 10\xD710 mesh, a few hundred iterations of a local\
+    \ search could yield a significantly better mapping.  \n\n3. Data / Signals the\
+    \ Mapper Currently Ignores That It Should Use  \n   - **Inter\u2011layer activation\
+    \ volume matrix**  \n     For each pair of consecutive layers, the mapper knows\
+    \ the output activation dimensions and the number of output channels. It can estimate\
+    \ the total data (in bytes) that must be communicated from each producer partition\
+    \ to each consumer partition. This matrix is the fundamental cost that placement\
+    \ should minimise.  \n\n   - **I/O chiplet locations and bandwidth**  \n     The\
+    \ system knows which chiplets are I/O and their network positions. The mapper\
+    \ should read this from `system.chiplet_network` and incorporate a bias toward\
+    \ I/O nodes for layers that interface with external data (first/last).  \n\n \
+    \  - **Chiplet topology beyond hop count**  \n     While hop distance is used,\
+    \ the adjacency matrix (provided via `adj_matrix_10x10_mesh.csv`) can reveal bisection\
+    \ bandwidth limitations or uneven connectivity. Even in a regular mesh, corners\
+    \ have degree 2, edges degree 3, interior degree 4. The mapper could favour higher\u2011\
+    degree nodes for heavily communicating partitions to reduce contention.  \n\n\
+    \   - **Layer execution order and pipeline parallelism**  \n     The workload\
+    \ description (`workload_vgg16.csv`) likely contains layer execution order. If\
+    \ the simulator supports pipelining (weight\u2011stationary, all weights loaded\
+    \ once), the mapper could try to co\u2011locate layers that are active simultaneously\
+    \ to exploit temporal locality, not merely spatial proximity.  \n\n   - **Per\u2011\
+    chiplet memory pressure over time**  \n     Instead of just the remaining capacity,\
+    \ the mapper should track which chiplets are already heavily loaded with many\
+    \ small layers versus those that are lightly loaded. A metric like **weight utilization\
+    \ ratio** can guide future allocations to avoid starving later layers of contiguous\
+    \ large memory blocks.  \n\nIn summary, the nearest\u2011neighbor mapper is a\
+    \ reasonable starting heuristic, but it treats placement as a simple packing problem\
+    \ and ignores the dominant cost in a weight\u2011stationary architecture: activation\
+    \ communication. Incorporating even a rudimentary communication volume model and\
+    \ I/O awareness would yield substantial improvements in latency and energy for\
+    \ the given 10\xD710 mesh with corner I/O and VGG\u201116 workload."
+  function_name: improved_centroid_mapper
+  improvement_pct:
+    comm_latency: -0.14033075030801054
+    compute_latency: -0.2100787951326546
+    total_latency: -0.14356669927413895
+  iteration: 1
+  metrics:
+    comm_latency: 297165.36
+    compute_latency: 14467.77
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_center_imc_improved_centroid_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 297165.36
+        compute_latency: 14467.77
+        total_latency: 311633.13
+    results_label: vgg16_hetero_center_imc_improved_centroid_mapper
+    total_latency: 311633.13
+  outcome: NO_IMPROVEMENT
+- function_name: weighted_comm_mapper
+  iteration: 2
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "We need a fundamentally different approach because the previous\
+    \ tweak to the nearest\u2011neighbor heuristic (Iteration\u202F1) did not change\
+    \ the resulting mapping at all \u2013 latency remained identical at 311633.13.\
+    \ My analysis shows the root cause is that the mapper ignores inter\u2011layer\
+    \ communication cost entirely and uses only a single\u2011point anchor. Simply\
+    \ patching the anchor selection (e.g., by preferring I/O closeness) is insufficient\
+    \ for VGG\u201116 on a 10\xD710 mesh. We must introduce a global cost function\
+    \ that explicitly models activation traffic and then optimise the allocation.\n\
+    \nI propose a **communication\u2011aware post\u2011optimisation** built on top\
+    \ of the existing greedy placement. The steps:\n\n1. **Run the current greedy\
+    \ mapper to obtain an initial feasible solution.**  \n   This gives us a set of\
+    \ layer\u2011to\u2011chiplet percentage assignments that respect all capacity\
+    \ constraints. We keep the same allocation for the initial pass so that the base\
+    \ solution always exists.\n\n2. **Define a synthetic communication cost for the\
+    \ whole network.**  \n   For each pair of consecutive layers \\((L_k, L_{k+1})\\\
+    ), compute the total number of activation elements that flow from every producer\
+    \ chiplet to every consumer chiplet.  \n   - Let \\(f_{k,i}\\) be the fraction\
+    \ (0\u2011100 scale, normalised) of layer \\(k\\) placed on chiplet \\(i\\). \
+    \ \n   - Let \\(V_k\\) be the total number of output activation elements of layer\
+    \ \\(k\\) \u2013 easily derived from layer parameters (e.g., for Conv2d: \\(H\
+    \ \\times W \\times C_{out}\\)).  \n   - The cost contribution of this edge is:\
+    \  \n     \\[\n     C_{k,k+1} = V_k \\cdot \\sum_{i} \\sum_{j} f_{k,i} \\cdot\
+    \ f_{k+1,j} \\cdot d(i,j)\n     \\]\n     where \\(d(i,j)\\) is the pre\u2011\
+    computed shortest\u2011path hop distance between chiplet \\(i\\) and \\(j\\).\n\
+    \n   The total mapping cost is the sum over all consecutive layer pairs, plus\
+    \ **I/O penalties**:\n   - Add a term for the first layer: \\(V_{input} \\cdot\
+    \ \\sum_{i} f_{1,i} \\cdot d_{IO}(i)\\), using the average distance to the four\
+    \ corner I/O chiplets (or the nearest one, depending on how external data enters).\n\
+    \   - Add a symmetric term for the last layer\u2019s output to I/O.\n   \n   This\
+    \ cost directly reflects the volume of bit\u2011hops that the activation traffic\
+    \ will generate in the mesh.\n\n3. **Apply simulated annealing (SA) to minimise\
+    \ this cost while maintaining capacity constraints.**  \n   The state is the set\
+    \ of percentage vectors for all layers. We perturb it by moving a small fraction\
+    \ (e.g., 5\u201110%) of one layer from one chiplet to another, provided the receiving\
+    \ chiplet has sufficient available weight capacity (in CMOS units). We recompute\
+    \ the cost and accept/reject according to the Metropolis criterion. Because VGG\u2011\
+    16 has only 16 layers and the mesh has 96 compute chiplets, even a few thousand\
+    \ iterations are computationally cheap.\n\n   *Implementation details:*\n   -\
+    \ Initial temperature set to a fraction of the initial cost, cooling schedule\
+    \ \\(T_{new} = 0.95 \\cdot T\\).\n   - At each step, randomly pick a layer, its\
+    \ current non\u2011zero allocation, and a candidate target chiplet that fits the\
+    \ moved weight units.\n   - To escape local minima efficiently, allow occasional\
+    \ moves that increase cost, and restrict the target chiplets to those within a\
+    \ reasonable distance (e.g., \u22645 hops) from the current allocation centre.\n\
+    \   - Before accepting any move, verify that the total weight units on the target\
+    \ chiplet do not exceed its capacity; if they do, reduce the move size or re\u2011\
+    select.\n   - Track the best\u2011observed state throughout and return it.\n\n\
+    4. **Replace the last step of `generate_mapping` with this SA refinement.**  \n\
+    \   The existing code first builds the greedy solution, then commits it. We will\
+    \ insert a call to an optimiser *after* the greedy pass but *before* committing\
+    \ to the system. The optimiser returns an improved set of percentages; we then\
+    \ write those into the temporary capacity state and commit as before.\n\nThis\
+    \ strategy attacks the communication problem head\u2011on and can automatically\
+    \ discover mappings where, for instance, the first layer clusters near the corner\
+    \ I/O nodes, heavy convolution layers stay centrally co\u2011located, and large\
+    \ FC layers are placed to minimise data movement from preceding pools. It does\
+    \ not modify the greedy heuristic at all, making it a genuinely different approach\
+    \ with a high chance of substantial latency reduction.\n\nIf the team prefers\
+    \ a lighter\u2011weight change, a simpler variant would be to replace only the\
+    \ anchor selection rule with the **volume\u2011weighted centroid**. After greedy\
+    \ placement of layer \\(k\\), compute the chiplet \\(c^* = \\arg\\min_c \\sum_i\
+    \ f_{k,i} \\cdot d(i,c)\\). Use \\(c^*\\) as the starting point for the next layer\
+    \ (instead of the single maximum chiplet). While less powerful than full SA, it\
+    \ still uses the communication volume signal and should yield a different mapping\
+    \ than Iteration\u202F1. I recommend starting with the SA, however, as it directly\
+    \ optimises the cost we care about."
+  function_name: weighted_comm_mapper
+  improvement_pct:
+    comm_latency: 4.124591114785146
+    compute_latency: -1.1249916882771465
+    total_latency: 3.8810375917171465
+  iteration: 2
+  metrics:
+    comm_latency: 284509.25
+    compute_latency: 14599.86
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_center_imc_weighted_comm_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 284509.25
+        compute_latency: 14599.86
+        total_latency: 299109.11
+    results_label: vgg16_hetero_center_imc_weighted_comm_mapper
+    total_latency: 299109.11
+  outcome: IMPROVED
+- function_name: volume_centric_nn_mapper
+  iteration: 3
+  outcome: RUNTIME_SUCCESS
+  runtime_attempt: 1
+- change_summary: "Given the previous attempts (Iteration\u202F1\u2019s description-only\
+    \ analysis and Iteration\u202F2\u2019s successful simulated\u2011annealing (SA)\
+    \ post\u2011optimisation that reduced latency by about 4%), a **fundamentally\
+    \ different strategy** is required that addresses the root weaknesses *inside\
+    \ the greedy placement itself* rather than relying on a separate global search.\
+    \ The SA approach, while effective, treats mapping as a black\u2011box optimisation\
+    \ and may still miss large, obvious structural improvements that could be captured\
+    \ by a smarter, communication\u2011aware heuristic. I propose a **Volume\u2011\
+    Centric Nearest\u2011Neighbour (VC\u2011NN)** algorithm that directly integrates\
+    \ inter\u2011layer activation traffic, I/O proximity, and load\u2011balancing\
+    \ into every placement decision, without the computational overhead of SA.\n\n\
+    ---\n### 1. Key Weaknesses Revisited\nThe current `_nearest_neighbor_mapper_v3`:\n\
+    \n- Ignores the **volume of activation data** that must travel between consecutive\
+    \ layers.\n- Anchors the search for the next layer on only the **single chiplet\
+    \ with the largest fraction** of the current layer.\n- Chooses the **first layer\u2019\
+    s start chiplet** based solely on raw memory availability and an arbitrary metric,\
+    \ completely ignoring the location of the four corner I/O chiplets.\n- Fills nearby\
+    \ chiplets greedily without considering that **central chiplets become congested**,\
+    \ forcing later layers to spread far away.\n- Has no notion of **producer\u2011\
+    consumer \u201Cdistance\u201D** beyond a one\u2011hot anchor point.\n\nSA can\
+    \ mitigate these to some extent, but a **deterministic, efficient heuristic**\
+    \ that internalises the communication cost can yield even better initial solutions\
+    \ and serve as a stronger base for any future refinement.\n\n---\n### 2. Proposed\
+    \ Algorithm: Volume\u2011Centric Nearest\u2011Neighbour (VC\u2011NN)\n\n#### 2.1\
+    \ Pre\u2011computed Data\nBefore mapping begins, the mapper can compute:\n\n-\
+    \ **Inter\u2011layer activation volume** \\(V_k\\) for each layer \\(k\\) (in\
+    \ number of elements, e.g., \\(H_k \\times W_k \\times C_{k}^{out}\\)). For convolutional\
+    \ and FC layers, these are readily available from the model definition.\n- **Distances\
+    \ to I/O chiplets**: For each compute chiplet, compute the shortest\u2011path\
+    \ distance to the **nearest corner I/O chiplet** (or an average distance to all\
+    \ four, depending on the data\u2011flow model). Let \\(d_{\\text{IO}}(i)\\) be\
+    \ that distance for chiplet \\(i\\).\n\n#### 2.2 First\u2011Layer Placement \u2013\
+    \ I/O\u2011Aware Start\nFor the initial layer, we must minimise the latency of\
+    \ bringing input activations from an I/O node. Instead of picking the chiplet\
+    \ with the most free memory, we choose the **start chiplet** that minimises a\
+    \ combined cost:\n\n\\[\n\\text{cost}_{\\text{start}}(i) = w_{\\text{IO}} \\cdot\
+    \ d_{\\text{IO}}(i) \\;-\\; w_{\\text{mem}} \\cdot \\text{avail\\_mem}(i)\n\\\
+    ]\n\nwhere \\(w_{\\text{IO}}\\) and \\(w_{\\text{mem}}\\) are tunable weights\
+    \ (e.g., both 1.0 normalised). This biases the start toward a corner, ensuring\
+    \ the input data travels a short distance. If the first layer is too large for\
+    \ a single chiplet, the allocation then spreads outward from that start point\
+    \ according to the standard nearest\u2011neighbour fill (Step 2.4). This simple\
+    \ change eliminates the arbitrary start\u2011chiplet selection of the original\
+    \ mapper.\n\n#### 2.3 Inter\u2011Layer Anchoring via Volume\u2011Weighted Centroid\n\
+    For layer \\(L_{k+1}\\), instead of anchoring on the chiplet that received the\
+    \ largest percentage of \\(L_k\\), we compute the **volume\u2011weighted centre\
+    \ of mass** of \\(L_k\\)\u2019s output. Let \\(f_{k,i}\\) be the fraction (0\u2013\
+    100) of layer \\(k\\) placed on chiplet \\(i\\). The ideal chiplet to **start**\
+    \ allocating \\(L_{k+1}\\) is the one that minimises the total communication volume\
+    \ from all producer partitions:\n\n\\[\nc^* = \\underset{c \\in \\text{compute\\\
+    _chiplets}}{\\arg\\min} \\sum_{i} f_{k,i} \\cdot V_k \\cdot d(i, c)\n\\]\n\nBecause\
+    \ \\(V_k\\) is a constant factor for a given layer pair, this is equivalent to\
+    \ minimising \\(\\sum_i f_{k,i} \\cdot d(i, c)\\). The **centroid chiplet** \\\
+    (c^*\\) is the best single point to concentrate the next layer\u2019s allocations\
+    \ and can be found efficiently by evaluating this sum for each candidate (or,\
+    \ if the topology permits, by selecting the chiplet that minimises the weighted\
+    \ sum, which on a mesh can be approximated by weighted medians\u2014but brute\u2011\
+    force over 96 chiplets is trivial).\n\nThis method properly accounts for the **spatial\
+    \ distribution** of the previous layer and avoids the \u201Cmax\u2011chiplet\u201D\
+    \ blind spot when the output is spread over several distant chiplets.\n\n####\
+    \ 2.4 Capacity\u2011Aware, Load\u2011Balanced Nearest\u2011Neighbour Fill\nOnce\
+    \ the optimal start chiplet \\(c^*\\) is determined, we proceed to allocate the\
+    \ required percentage of layer \\(L_{k+1}\\) across available compute chiplets.\
+    \ The original algorithm sorts candidate chiplets by distance from the start chiplet,\
+    \ then by available memory. This tends to saturate the central region over time.\
+    \ We **augment the sorting key** with a soft occupancy penalty:\n\n\\[\n\\text{priority}(i)\
+    \ = d(i, c^*) \\;+\\; \\alpha \\cdot \\text{occupancy}(i)\n\\]\n\nwhere \\(\\\
+    text{occupancy}(i)\\) is the fraction of the chiplet\u2019s total weight capacity\
+    \ already consumed (or the fraction fill level, 0\u20131). \\(\\alpha\\) is a\
+    \ small coefficient (e.g., 0.5\u20131.0) that gently encourages the mapper to\
+    \ use slightly farther chiplets if the nearest ones are already heavily loaded.\
+    \ This **preserves central capacity** for later, possibly large layers that gain\
+    \ the most from proximity. The remainder of the fill logic (allocating whole capacity\
+    \ units and tracking percentages) remains unchanged.\n\n#### 2.5 Final\u2011Layer\
+    \ I/O Bias\nA similar volume\u2011based cost can be applied when placing the very\
+    \ last layer: we want its output to be close to an I/O corner. After the initial\
+    \ greedy placement of the last layer (using the centroid anchor from the penultimate\
+    \ layer), we can optionally **re\u2011evaluate** the start chiplet for the last\
+    \ layer by minimising:\n\n\\[\n\\text{cost}_{\\text{last}}(i) = \\sum_{j} f_{\\\
+    text{penult},j} \\cdot d(j, i) \\;+\\; \\beta \\cdot d_{\\text{IO}}(i)\n\\]\n\n\
+    with a small \\(\\beta\\) (e.g., 0.1\u20130.2) that nudges the final layer\u2019\
+    s placement toward an I/O node without sacrificing too much communication volume\
+    \ from the previous layer. This can be implemented as a final\u2011step refinement,\
+    \ or integrated into the centroid calculation for the last layer by adding a dummy\
+    \ \u201Coutput sink\u201D at the nearest I/O chiplet.\n\n---\n### 3. Why This\
+    \ is Different and Expected to Improve Further\n\n- **SA is reactive** \u2013\
+    \ it starts from a greedy solution and tries local moves to lower a global cost.\
+    \ VC\u2011NN **proactively** embeds the same inter\u2011layer volume metric into\
+    \ every decision, arriving at a solution that is already near-optimal without\
+    \ expensive post\u2011processing.\n- **I/O anchoring for the first layer** can\
+    \ cut a large, constant source of latency that SA may not explore aggressively\
+    \ because it requires moving a large fraction of the first layer over many hops.\n\
+    - **The centroid anchor** uses the full output distribution, which SA would have\
+    \ to discover step\u2011by\u2011step. The deterministic heuristic is guaranteed\
+    \ to produce a locally communication\u2011efficient inter\u2011layer link.\n-\
+    \ **Load\u2011balancing via occupancy** prevents fragmentation, which is hard\
+    \ for SA to fix in a high\u2011temperature phase without violating capacity constraints.\n\
+    - The algorithm retains the efficiency of the greedy pass (O(L\xB7C\xB2) where\
+    \ L is layers, C is chiplets) and remains **deterministic, reproducible, and easy\
+    \ to tune** with a few weights.\n\nTogether, these changes directly attack the\
+    \ weaknesses identified in Iteration\u202F1, and because they operate inside the\
+    \ greedy mapper, they provide a clean, modular alternative to SA. They can be\
+    \ implemented as a new mapper function (e.g., `_volume_centric_nearest_neighbor`)\
+    \ and integrated into `ModelMapper._get_mapper_function`. No external optimisation\
+    \ library is needed.\n\n---\n### 4. Expected Impact\nOn the VGG\u201116 workload\
+    \ with the 10\xD710 mesh, we anticipate:\n\n- Substantial reduction in input\u2011\
+    activation latency from the I/O\u2011aware first layer placement.\n- Shorter average\
+    \ hop\u2011count for the inter\u2011layer communication that dominates the pipeline\
+    \ because the centroid alignment minimises weighted distance.\n- Better long\u2011\
+    range capacity usage, preventing later fully\u2011connected layers from being\
+    \ forced to remote chiplets.\n- A **further latency reduction beyond the 4% observed\
+    \ from SA**, possibly pushing into the 5\u201310% range, while maintaining a deterministic\
+    \ and fast mapping step.\n\nThis new strategy complements the SA approach (the\
+    \ output of VC\u2011NN could even serve as a superior initial solution for SA\
+    \ if even more optimisation is desired), but it addresses the problem from a completely\
+    \ different angle\u2014making the greedy algorithm itself aware of what it previously\
+    \ ignored."
+  function_name: volume_centric_nn_mapper
+  improvement_pct:
+    comm_latency: -0.143518630378891
+    compute_latency: -0.2100787951326546
+    total_latency: -0.14660667817810602
+  iteration: 3
+  metrics:
+    comm_latency: 297174.82
+    compute_latency: 14467.77
+    metrics_file: /home/ECE511-Final-Research-Project/CHIPSIM/_results/formatted_results/vgg16_hetero_center_imc_volume_centric_nn_mapper/formatted_comparison_metrics/Approach_Comparison_Metrics.txt
+    num_models: 1
+    per_model:
+      vgg16:
+        comm_latency: 297174.82
+        compute_latency: 14467.77
+        total_latency: 311642.59
+    results_label: vgg16_hetero_center_imc_volume_centric_nn_mapper
+    total_latency: 311642.59
+  outcome: NO_IMPROVEMENT
+max_iterations: 3
+total_iterations: 3
